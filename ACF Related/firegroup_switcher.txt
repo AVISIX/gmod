@@ -1,0 +1,155 @@
+@name Firegroup Switcher
+@inputs [Group1 Group2 Group3]:array Driver:entity FireKey SwitchKey
+@outputs MFire
+@persist Groups:table GroupCounter GunSwitcher MFire
+interval(60)
+
+PrintOutput = 0
+
+if(first())
+{    
+    #Made by Sixmax
+    
+    GunSwitcher = 1
+    GroupCounter = 1
+    
+    if(Group1:count() > 0)
+    {
+        Groups[GroupCounter, array] = Group1  
+                 
+        GroupCounter++
+        MFire = FireKey
+    }
+    else
+    {
+        if(PrintOutput == 1)
+        {
+            print("Group1 doas not contain Entities")   
+        } 
+    }
+    
+    if(Group2:count() > 0)
+    {
+        Groups[GroupCounter, array] = Group2   
+                
+        GroupCounter++        
+    }
+    else
+    {
+        if(PrintOutput == 1)
+        {
+            print("Group2 doas not contain Entities")    
+        }
+    }
+    
+    if(Group3:count() > 0)
+    {
+        Groups[GroupCounter, array] = Group3    
+               
+        GroupCounter++
+    }
+    else
+    {
+        if(PrintOutput == 1)
+        {
+            print("Group3 doas not contain Entities")   
+        } 
+    }    
+    
+    if(PrintOutput == 1)
+    {
+        for(A = 1, Groups:count())
+        {
+            for(B = 1, Groups[A, array]:count())
+            {
+                print("Group " + A + ": Weapon " + B +": " + Groups[A, array][B, entity]:model())
+            }   
+        }
+    }
+}
+
+if(changed(SwitchKey) && SwitchKey)
+{
+    for(B = 1, Groups[GunSwitcher, array]:count())
+    {
+        local Gun = Groups[GunSwitcher, array][B, entity]
+            
+        if(Gun:isValid())
+        {
+            Gun:acfFire(0)
+        }
+        else
+        {
+            if(PrintOutput == 1)
+            {
+                print("Error stopping GunFire, a Gun was invalid!")
+            }
+        } 
+    }    
+    
+    GunSwitcher = GunSwitcher + 1
+    
+    if(GunSwitcher > Groups:count())
+    {
+        GunSwitcher = 1
+    } 
+    
+    if(PrintOutput == 1)
+    {
+        print("Switched to group: " + GunSwitcher)
+    }
+}
+
+if(FireKey)
+{
+    if(GunSwitcher==1){MFire=FireKey}
+    if(GunSwitcher > 0 && GunSwitcher <= 3)
+    {      
+        for(B = 1, Groups[GunSwitcher, array]:count())
+        {
+            local Gun = Groups[GunSwitcher, array][B, entity]
+            
+            if(Gun:isValid())
+            {
+                Gun:acfFire(1)
+            } 
+            else
+            {
+                if(PrintOutput == 1)
+                {
+                    print("Error: The Gun was invalid!")   
+                }
+            }
+        }                         
+    }   
+    else
+    {
+        if(PrintOutput == 1)
+        {
+            print("Error: Could not fire guns!") 
+        }  
+    }
+}
+
+if(changed(!FireKey))
+{
+    MFire = 0
+    for(B = 1, Groups[GunSwitcher, array]:count())
+    {
+        local Gun = Groups[GunSwitcher, array][B, entity]
+            
+        if(Gun:isValid())
+        {
+            Gun:acfFire(0)
+        }
+        else
+        {
+            if(PrintOutput == 1)
+            {
+                print("Error stopping GunFire, a Gun was invalid!")
+            }
+        } 
+    }    
+}
+
+

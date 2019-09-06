@@ -1,0 +1,65 @@
+@name Missle Firing Order
+@inputs Missles:array FiringKey:number
+@outputs FireShots:number
+@persist Connections:table Switcher:number LinkRemover:number
+
+interval(60)
+
+PrintOutput = 1
+Delay = 3500
+
+if(first())
+{
+    #Made by Sixmax
+    
+    Switcher = 1
+    
+    if(PrintOutput == 1)
+    {        
+        if(Missles:count() == 0)
+        {
+            print("The array was invalid!")     
+        }
+        else
+        {
+            for(I = 1, Missles:count())
+            {
+                print("Linked weapon " + I + ": "+Missles[I, entity]:model())
+            }   
+        }
+    }
+}
+
+if(FiringKey)
+{
+    LinkRemover = 1       
+    FireShots = 1
+    
+    Missles[Switcher, entity]:createWire(entity(), "Fire", "FireShots")
+    
+    timer("Next", Delay)
+}
+else
+{
+    FireShots = 0     
+    stoptimer("Next")     
+
+    if(LinkRemover < Missles:count())
+    {
+        Missles[LinkRemover, entity]:deleteWire("Fire")
+        LinkRemover++
+    }      
+}
+
+if(clk("Next"))
+{
+    Missles[Switcher, entity]:deleteWire("Fire")
+
+    Switcher++
+    if(Switcher > Missles:count())
+    {
+        Switcher = 1
+    }   
+    
+    stoptimer("Next")
+}
