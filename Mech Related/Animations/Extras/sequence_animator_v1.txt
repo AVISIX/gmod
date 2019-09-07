@@ -79,24 +79,32 @@ if (first())
             }
                             
             T["Animation", vector] = mix(T["Destination", vector], T["Origin", vector], T["Calc", number])
+            
+            if(T["Calc", number] >= 1)
+            {
+                T["Calc", number] = 0   
+                T["Part", number] = min(T["Part", number] + 1, EntryD:count())
+            
+                T["OV", vector]   = T["Animation", vector]
+            } 
+            
+            if(Counter <= EntryD[0, table][2, number])
+             {
+                T["Calc", number] = 0
+                T["Part", number] = 0
+            
+                T["OV", vector] = Start
+                T["Animation", vector] = Start
+            } 
         }
-            
-        if(T["Calc", number] >= 1)
-        {
-            T["Calc", number] = 0   
-            T["Part", number] = min(T["Part", number] + 1, EntryD:count())
-            
-            T["OV", vector]   = T["Animation", vector]
-        } 
-            
-        if(Counter <= EntryD[0, table][2, number])
+        else
         {
             T["Calc", number] = 0
             T["Part", number] = 0
             
             T["OV", vector] = Start
-            T["Animation", vector] = Start
-        }                               
+            T["Animation", vector] = Start            
+        }                              
     }
     
     function vector table:anim()
@@ -107,15 +115,15 @@ if (first())
     holoCreate(1)
 }
 
-if(C < 1)
-{
-    C = C + 0.01
-}
 
-if( C >= 1 )
+    C = C + 0.01
+
+
+if( C > 1 )
 { 
     C = 0 
 }
+
 
 EntryData:aEntry(0, 0, 0.45, E:toWorld(vec(0,100,0)))
 EntryData:aEntry(1, 0.45, 0.6, E:toWorld(vec(0,0,50)))
