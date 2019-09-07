@@ -1,0 +1,127 @@
+@name Sequence Animator V1
+@persist [EntryData Animation]:table C
+
+interval( 60 )
+
+E = entity()
+
+#[
+    Made by Sixmax (STEAM_0:0:104139026)    
+    https://github.com/sixmax/
+]#
+
+if (first()) 
+{
+    
+    #[
+        Add a new Sequence
+
+        This (table:) = The table where all the sequences of the animation are stored in 
+           
+        Order  = Order of which the sequences should be ran
+        Start  = Tell the animation at which point in the Counter you want the sequence to start (sequences cant overlap)
+        End    = Tell the animation at which point in the Counter you want the sequence to end (sequences cant overlap)
+        Ending = The Position where you want the animation to move to 
+    
+    
+        Important: The first sequence has to have "0" as Order. 
+    ]#
+    function void table:aEntry(Order:number, Start:number, End:number, Ending:vector)
+    {  
+       This[Order, table] = table(Order, Start, End, Ending)  
+    } 
+    
+    #[
+        Convert a part of a 0->1 counter to a 0->1 counter.
+        Aka: Turn 0.4...0.6 to 0...1 
+    ]#
+    function number cConverter(Beginning, Ending, TotalCounter)
+    {
+        return clamp(-Beginning * (1 / (Ending - Beginning)) + ((1 / (Ending - Beginning)) * TotalCounter ), 0, 1)
+    }
+    
+    #[
+        Run the animation
+              
+        This (table:) = The table where the aAnim function stores its Data in.
+          
+        EntryD  = The Table where all the sequences are stored in
+        Start   = The position where the animation should start
+        Counter = The Counter which runs the animation (Has to go from 0 to 1)
+    
+    
+        Important: Do NOT use the Sequences table for the This(table) value!
+    ]#
+    function void table:aAnim(EntryD:table, Start:vector, Counter)
+    {     
+        local T = This
+              
+        if(Counter < 1)
+        {              
+            T["Calc", number] = cConverter(EntryD[T["Part", number], table][2, number] , EntryD[T["Part", number], table][3, number], Counter)     
+                
+            if(T["Part", number] <= 0)
+            {
+                T["Origin", vector] = Start                   
+            }
+            else
+            {
+                T["Origin", vector] = T["OV", vector]                
+            }
+            
+            if(T["Part", number] == EntryD:count())
+            {
+                T["Destination", vector] = Start
+            }
+            else
+            {
+                T["Destination", vector] = EntryD[T["Part", number], table][4, vector]  
+            }
+                            
+            T["Animation", vector] = mix(T["Destination", vector], T["Origin", vector], T["Calc", number])
+        }
+            
+        if(T["Calc", number] >= 1)
+        {
+            T["Calc", number] = 0   
+            T["Part", number] = min(T["Part", number] + 1, EntryD:count())
+            
+            T["OV", vector]   = T["Animation", vector]
+        } 
+            
+        if(Counter <= EntryD[0, table][2, number])
+        {
+            T["Calc", number] = 0
+            T["Part", number] = 0
+            
+            T["OV", vector] = Start
+            T["Animation", vector] = Start
+        }                               
+    }
+    
+    function vector table:anim()
+    {
+        return This["Animation", vector]   
+    }
+    
+    holoCreate(1)
+}
+
+if(C < 1)
+{
+    C = C + 0.01
+}
+
+if( C >= 1 )
+{ 
+    C = 0 
+}
+
+EntryData:aEntry(0, 0, 0.45, E:toWorld(vec(0,100,0)))
+EntryData:aEntry(1, 0.45, 0.6, E:toWorld(vec(0,0,50)))
+EntryData:aEntry(2, 0.6, 0.7, E:toWorld(vec(0,-100,0)))
+EntryData:aEntry(3, 0.7, 1, E:toWorld(vec(0,0,0)))
+
+Animation:aAnim(EntryData, E:pos(), C)
+
+holoPos(1,Animation:anim())
