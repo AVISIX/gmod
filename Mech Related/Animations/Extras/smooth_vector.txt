@@ -3,26 +3,26 @@
 interval(60)
 
 #[
-    Made by Sixmax (STEAM_0:0:104139026)    
+    Made by Sixmax 
     https://github.com/sixmax/
 ]#
 
 if(first())
 {
     holoCreate(1)
-    
+
     #[
         Slowly make a Vector move to another Vector with a specified Strength
     ]#
     function vector sVector(Origin:vector, Destination:vector, Strength:number)
-    {   
+    {
         if((Origin - Destination):length() > 0.1)
-        { 
+        {
             return Origin - (Origin - Destination) * max((Origin - Destination):length() * (Strength / 100), 0.1)
         }
         else
         {
-            return Destination   
+            return Destination
         }
     }
 }

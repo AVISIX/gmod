@@ -10,45 +10,48 @@ Delay = 3500
 
 if(first())
 {
-    #Made by Sixmax
-    
+    #[
+        Made by Sixmax
+        https://github.com/sixmax/
+    ]#
+
     Switcher = 1
-    
+
     if(PrintOutput == 1)
-    {        
+    {
         if(Missles:count() == 0)
         {
-            print("The array was invalid!")     
+            print("The array was invalid!")
         }
         else
         {
             for(I = 1, Missles:count())
             {
                 print("Linked weapon " + I + ": "+Missles[I, entity]:model())
-            }   
+            }
         }
     }
 }
 
 if(FiringKey)
 {
-    LinkRemover = 1       
+    LinkRemover = 1
     FireShots = 1
-    
+
     Missles[Switcher, entity]:createWire(entity(), "Fire", "FireShots")
-    
+
     timer("Next", Delay)
 }
 else
 {
-    FireShots = 0     
-    stoptimer("Next")     
+    FireShots = 0
+    stoptimer("Next")
 
     if(LinkRemover < Missles:count())
     {
         Missles[LinkRemover, entity]:deleteWire("Fire")
         LinkRemover++
-    }      
+    }
 }
 
 if(clk("Next"))
@@ -59,7 +62,7 @@ if(clk("Next"))
     if(Switcher > Missles:count())
     {
         Switcher = 1
-    }   
-    
+    }
+
     stoptimer("Next")
 }
