@@ -1,0 +1,267 @@
+@name Animavel_-_v4
+@persist Legs:table Anim:table E:entity
+@model models/hunter/blocks/cube05x05x05.mdl
+
+interval(60)
+
+#[
+    Made by Sixmax
+    https://github.com/sixmax/
+]#
+
+if(first())
+{
+    E = entity()
+    
+    entity():propGravity(0)
+
+    #Clear all Legs
+    function void table:cLegs()
+    {
+        This:clear()   
+    }    
+
+    #Clear a specific Leg
+    function void table:cLeg(Key:string)
+    {
+        This[Key, table]:clear()      
+    }  
+    
+    function number cConverter(Beginning, Ending, TotalCounter)
+    {
+        return clamp(-Beginning * (1 / (Ending - Beginning)) + ( (1 / (Ending - Beginning)) * TotalCounter ),0,1)
+    }   
+
+    #Add a bunch of sounds, which will be played on the specific Leg
+    function void table:addSounds(Key:string, SoundIDs:array)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(I = 1, SoundIDs:count())
+        {
+            SArray:pushString(SoundIDs[I, string])   
+        }    
+    }
+
+    #Remove a bunch of sounds from the specific Leg
+    function void table:removeSounds(Key:string, SoundIDs:array)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(A = 1, SArray:count())
+        {
+            for(B = 1, SoundIDs:count())
+            {
+                if(SArray[A, string] == SoundIDs[B, string])
+                {
+                    SArray:removeString(A)
+                }
+            }
+        }    
+    }
+
+    #Add a specific sound that should be played on the specific Leg
+    function void table:addSound(Key:string, SoundID:string)
+    {
+        This[Key, table]["Sounds", array]:pushString(SoundID)     
+    }
+    
+    #Remove a specific sound 
+    function void table:removeSound(Key:string, SoundID:string)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(I = 1, SArray:count())
+        {
+            if(SArray[I, string] == SoundID)
+            {
+                This[Key, table]["Sounds", array]:removeString(I) 
+            }  
+        }
+    }
+
+    #Return the animation of a specific Leg
+    function vector table:a(Key:string)
+    {
+        return This[Key, table]["Animation", vector]   
+    }
+
+    #Override all the Vectors in the animation for a specific Leg    
+    function void table:overrideLeg(Key:string, NewVector:vector)
+    {
+        This[Key, table]["Animation",   vector] = NewVector      
+        This[Key, table]["Origin",      vector] = NewVector    
+        This[Key, table]["Destination", vector] = NewVector   
+        This[Key, table]["Ranger",      ranger] = rangerOffset(0, NewVector, vec(0,0,0))
+    }
+
+    #Do not touch this function    
+    function void table:animateLeg(Counter:number)
+    {
+        local LegCounter = cConverter(This["GStart", number], This["GEnd", number], Counter) 
+        
+        if(LegCounter < 1)
+        {        
+            local SlaveVelL = This["Slave", entity]:velL()
+            
+            local X         = clamp(SlaveVelL:x() / This["Vel", number], -This["MaxSDist", number] , This["MaxSDist", number] )
+            local Y         = clamp(SlaveVelL:y() / This["Vel", number], -This["MaxSDist", number] , This["MaxSDist", number] )
+            
+            This["Ranger", ranger] = rangerOffset(1000, This["Slave", entity]:toWorld(This["RangerPos", vector] + vec(X,Y,0)), This["RangerDir", vector])  
+            
+            if(This["Ranger", ranger]:position():distance(This["Animation", vector]) > 1)
+            {
+                This["Destination", vector] = This["Ranger", ranger]:position()
+                
+                local Middle = mix(This["Destination", vector], This["Origin", vector], 0.5) + This["Slave", entity]:up() * (This["Origin", vector] - This["Destination", vector]):length() / This["SHeight", number] 
+                        
+                This["Animation", vector] = bezier(This["Origin", vector], Middle, This["Destination", vector], LegCounter)
+            }                                             
+        } 
+        else
+        {   
+            if(This["Sounds", array]:count() > 0)
+            {
+                if((This["Animation", vector] - This["Destination", vector]):length() > 1)
+                {
+                    local Sound =  This["Sounds", array][randint(1, This["Sounds", array]:count()), string]
+                    This["Slave", entity]:soundPlay(Sound, soundDuration(Sound), Sound)     
+                }                           
+            }
+
+            This["Animation", vector] = This["Destination", vector]
+            This["Origin",    vector] = This["Animation", vector]               
+        }
+    }
+
+    #Create a Leg the animation should use
+    function void table:createLeg(Name:string, GaitStart:number, GaitEnd:number, Slave:entity, RangerPosition:vector, RangerDirection:vector, Velocity:number, StepHeight:number, MaxStepDist:number)
+    {
+        This[Name, table]
+        = table(
+            "Name"      = Name,
+            "GStart"    = GaitStart,
+            "GEnd"      = GaitEnd,
+            "Slave"     = Slave,
+            "RangerPos" = RangerPosition,
+            "RangerDir" = RangerDirection,
+            "Vel"       = Velocity,
+            "SHeight"   = StepHeight,
+            "MaxSDist"  = MaxStepDist,
+            "Sounds"    = array()
+        )       
+        
+        This:overrideLeg(Name, RangerPosition)
+    }  
+
+    #Initialize the Animation
+    function void table:initAnimation(LegTable:table, BaseProp:entity, BaseSpeed:number, Sensitivity:number)
+    {
+        This["BaseProp",   entity] = BaseProp                   
+        This["BaseSpeed",  number] = BaseSpeed   
+        This["Sensitvity", number] = Sensitivity   
+        This["LegTable",    table] = LegTable
+    }
+    
+    function void table:runAnimation()
+    {      
+        local LegTable = This["LegTable", table]    
+
+        local VelCF = (((This["BaseProp", entity]:vel():length() - This["BaseProp", entity]:velL():z()) / 4 + This["BaseProp", entity]:angVelVector():length()) * 2) / This["Sensitvity", number]                        
+        This["Counter", number] = This["Counter", number] + clamp(VelCF / LegTable:count(), This["BaseSpeed", number], 1)
+                
+        foreach(K, Foot:table = LegTable)
+        {
+            Foot:animateLeg(This["Counter", number])    
+        } 
+
+        if(This["Counter", number] >= 1)
+        {
+            This["Counter", number] = 0   
+        }           
+    }
+    
+    holoCreate(1)
+    holoCreate(2)
+    holoCreate(3)
+    holoCreate(4)
+    holoCreate(5)
+    holoCreate(6)    
+    
+    local SL = 1.5
+    local MaxStepDistance = sqrt(70^2 * 2)
+    local GlobalVelocity = 1.8
+    local StepHeightDiv = 8
+    
+    #Initialize Animation
+    Anim:initAnimation(Legs, entity(), 0.0365, 395)
+    
+    #Initialize Legs
+    Legs:createLeg("A", 0, 0.5, entity(), vec(40,40,0)   * SL, vec(0,0,-1), GlobalVelocity, StepHeightDiv, MaxStepDistance)
+    Legs:createLeg("B", 0.5, 1, entity(), vec(40,-40,0)  * SL, vec(0,0,-1), GlobalVelocity, StepHeightDiv, MaxStepDistance)
+    
+    Legs:createLeg("C", 0, 0.5, entity(), vec(-40,40,0)  * SL, vec(0,0,-1), GlobalVelocity, StepHeightDiv, MaxStepDistance)
+    Legs:createLeg("D", 0.5, 1, entity(), vec(-40,-40,0) * SL, vec(0,0,-1), GlobalVelocity, StepHeightDiv, MaxStepDistance)
+    
+    Legs:createLeg("E", 0, 0.5, entity(), vec(0,-40,0)   * SL, vec(0,0,-1), GlobalVelocity, StepHeightDiv, MaxStepDistance)
+    Legs:createLeg("F", 0.5, 1, entity(), vec(0,40,0)    * SL, vec(0,0,-1), GlobalVelocity, StepHeightDiv, MaxStepDistance)
+    
+    #Initialize Sounds
+    Legs:addSounds("A", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    Legs:addSounds("B", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    Legs:addSounds("C", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    Legs:addSounds("D", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    Legs:addSounds("E", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    Legs:addSounds("F", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+
+#[  
+    > --- Examples for adding/removing sounds --- <
+
+
+    - Add specific sounds -
+    Legs:addSound("A", "npc/dog/dog_footstep1.wav")
+    Legs:addSound("B", "npc/dog/dog_footstep1.wav")
+    Legs:addSound("C", "npc/dog/dog_footstep1.wav")
+    Legs:addSound("D", "npc/dog/dog_footstep1.wav")
+    Legs:addSound("E", "npc/dog/dog_footstep1.wav")
+    Legs:addSound("F", "npc/dog/dog_footstep1.wav")
+
+    Legs:addSound("A", "npc/dog/dog_footstep4.wav")
+    Legs:addSound("B", "npc/dog/dog_footstep4.wav")
+    Legs:addSound("C", "npc/dog/dog_footstep4.wav")
+    Legs:addSound("D", "npc/dog/dog_footstep4.wav")
+    Legs:addSound("E", "npc/dog/dog_footstep4.wav")
+    Legs:addSound("F", "npc/dog/dog_footstep4.wav")
+
+
+    - Remove a specific sound -
+    Legs:removeSound("A", "npc/dog/dog_footstep4.wav")
+    Legs:removeSound("B", "npc/dog/dog_footstep4.wav")
+    Legs:removeSound("C", "npc/dog/dog_footstep4.wav")
+    Legs:removeSound("D", "npc/dog/dog_footstep4.wav")
+    Legs:removeSound("E", "npc/dog/dog_footstep4.wav")
+    Legs:removeSound("F", "npc/dog/dog_footstep4.wav")
+
+
+    - Add a bunch of sounds -
+    Legs:addSounds("A", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav","npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    
+    
+    - Remove a bunch of sounds -
+    Legs:removeSounds("A", array("npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))            
+]#
+
+}
+
+#Run animation
+Anim:runAnimation()
+
+#Move Holos to each Legs animation
+holoPos(1, Legs:a("A"))  
+holoPos(2, Legs:a("B"))  
+holoPos(3, Legs:a("C"))  
+holoPos(4, Legs:a("D"))
+holoPos(5, Legs:a("E"))  
+holoPos(6, Legs:a("F"))    
+
+#E:applyForce(((E:forward() * (34 * 0.6)) * 10 - (E:vel() * vec(0.6, 0.6, 0.8))) * E:mass()) 
