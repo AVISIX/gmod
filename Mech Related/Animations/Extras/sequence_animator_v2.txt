@@ -1,0 +1,151 @@
+@name Sequence Animator V2
+@persist C:number Anim:table
+
+interval( 60 )
+
+E = entity()
+
+#[
+    Made by Sixmax
+    https://github.com/sixmax/
+]#
+
+if(first())
+{
+    function number cConverter(Beginning, Ending, TotalCounter)
+    {
+        return clamp(-Beginning * (1 / (Ending - Beginning)) + ((1 / (Ending - Beginning)) * TotalCounter ), 0, 1)
+    }
+    
+    function void table:checkSequenceSessionData()
+    {
+        if(!This:exists("runtime"))
+        {              
+            This["runtime", table] = table("curSeq" = 0,
+                                        "animation" = vec(),
+                                        "prevEnd" = vec(),
+                                        "firstIteration" = 0
+                                        )    
+        }
+ 
+        if(!This:exists("sequences"))
+        {           
+            
+            This["sequences", table] = table()   
+        }
+    }    
+    
+    function void table:addSequenceEntry(Sequence_Start:number, Sequence_End:number, Destination:vector)
+    {
+        This:checkSequenceSessionData()
+        
+        local T = This["sequences", table]
+        
+        local Pos_In_Queue = max(T:count(), 0)
+        
+        T[Pos_In_Queue, table] = table("start" = Sequence_Start,
+                                       "end" = Sequence_End,
+                                       "dest" = Destination)          
+    }
+    
+    function void table:executeSequenceSession(Origin:vector, Execution_Counter:number)
+    {
+        if(This:count() == 0)
+        {
+            return   
+        }
+
+        local Counter = Execution_Counter
+           
+        local R = This["runtime",   table] #Execution shit
+        local D = This["sequences", table] #Sequence infos
+        
+        if(R["firstIteration", number] == 0)
+        {
+            # Get the starting sequence
+            for(I = 0, D:count() - 1)
+            {
+                local CSeq = D[I, table]
+                
+                local CStart = CSeq["start", number]
+                local CEnd   = CSeq["end", number]
+       
+                if(Counter > CStart && Counter <= CEnd)
+                {
+                    R["curSeq", number] = I
+                    
+                    break
+                }                                                   
+            }     
+            
+            R["firstIteration", number] = 1
+        }
+        
+        local SequenceIndex = R["curSeq", number]    
+        
+        local CurStart = R["prevEnd", vector]
+        if(SequenceIndex == 0)
+        {
+            CurStart = Origin # Without this the first sequence wouldnt have a start
+        }
+
+        local CurEnd = D[SequenceIndex, table]["dest", vector]       
+            
+        local CurSeqAnimStart = D[SequenceIndex, table]["start", number]
+        local CurSeqAnimEnd   = D[SequenceIndex, table]["end",   number]
+        
+        local CounterTranslation = cConverter(CurSeqAnimEnd, CurSeqAnimStart, Counter) #Convert parts of a 0->1 Counter to a 0->1 Counter 
+        
+        R["animation", vector] = mix(CurStart, CurEnd, CounterTranslation)
+        
+        if(Counter >= CurSeqAnimEnd || CounterTranslation >= 1)
+        {
+            R["prevEnd", vector] = R["animation", vector]  
+        }
+      
+        if(SequenceIndex != D:count() - 1)
+        {
+            #Keep iterating through all the items to get the next sequence
+            for(I = 0, D:count() - 1)
+            {
+                local CSeq = D[I, table]
+                
+                local CStart = CSeq["start", number]
+                local CEnd   = CSeq["end", number]
+       
+                if(Counter > CStart && Counter <= CEnd)
+                {
+                    R["curSeq", number] = I
+                    
+                    break
+                }                                                
+            }  
+        }
+        else
+        {
+            R["curSeq", number] = 0
+            R["firstIteration", number] = 0 # Reset all the shit when reaching the end
+        }
+    }
+    
+    function vector table:anim()
+    {
+        return This["runtime", table]["animation", vector]
+    }
+    
+    Anim:addSequenceEntry(0, 0.233,    E:toWorld(vec(100,0,0)))
+    Anim:addSequenceEntry(0.233, 0.45, E:toWorld(vec(0,0,100)))
+    Anim:addSequenceEntry(0.45, 0.825, E:toWorld(vec(-100,0,0)))
+    Anim:addSequenceEntry(0.825, 1,    E:toWorld(vec(0,100,0)))
+       
+    holoCreate(1)
+}
+
+C = C + 0.023
+if(C > 1)
+{
+    C = 0   
+}
+
+Anim:executeSequenceSession(E:pos(), C)
+holoPos(1, Anim:anim())
