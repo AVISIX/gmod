@@ -41,6 +41,15 @@
             - table:insertLinearEntry(number, number, number, vector)                 --> Index, GStart, GEnd, Destinaton
             - table:insertBezierEntry(number, number, number, vector, vector)         --> Index, GStart, GEnd, Middle, Destination
             - table:insertCubicEntry(number, number, number, vector, vector, vector)  --> Index, GStart, GEnd, PointA, PointB, Destination
+
+
+
+
+
+     4. Running your Animation
+    Use the table:runSequenceSession(vector, number) function to run all the sequences. --> Start, Counter
+    
+    <WARNING: Counter has to go from 0 to 1 and cannot exceed 1 or go below 0>
 ]#
 
 # --- Internal Functions --- #
