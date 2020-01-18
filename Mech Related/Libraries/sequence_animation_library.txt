@@ -41,12 +41,10 @@
             - table:insertLinearEntry(number, number, number, vector)                 --> Index, GStart, GEnd, Destinaton
             - table:insertBezierEntry(number, number, number, vector, vector)         --> Index, GStart, GEnd, Middle, Destination
             - table:insertCubicEntry(number, number, number, vector, vector, vector)  --> Index, GStart, GEnd, PointA, PointB, Destination
-
-
-
-
-
-     4. Running your Animation
+            
+            
+            
+    4. Running your Animation
     Use the table:runSequenceSession(vector, number) function to run all the sequences. --> Start, Counter
     
     <WARNING: Counter has to go from 0 to 1 and cannot exceed 1 or go below 0>
@@ -63,10 +61,10 @@ function void table:checkSequenceSessionData()
     if(!This:exists("runtime"))
     {              
         This["runtime", table] = table("curSeq" = 0,
-                                    "animation" = vec(),
-                                    "prevEnd" = vec(),
-                                    "firstIteration" = 0
-                                    )    
+                                       "animation" = vec(),
+                                       "prevEnd" = vec(),
+                                       "firstIteration" = 0
+                                       )    
     }
 
     if(!This:exists("sequences"))
@@ -101,7 +99,7 @@ function void table:updateLinearDestination(Index:number, NewDestination:vector)
 {
     local Sequences = This["sequences", table]
     
-    if(Sequences:count() == 0)
+    if(!Sequences:count())
     {
         return   
     }
@@ -118,7 +116,7 @@ function void table:updateBezierPoints(Index:number, NewMiddle:vector, NewDestin
 {
     local Sequences = This["sequences", table]
     
-    if(Sequences:count() == 0)
+    if(!Sequences:count())
     {
         return   
     }
@@ -128,15 +126,17 @@ function void table:updateBezierPoints(Index:number, NewMiddle:vector, NewDestin
         return   
     }
     
-    Sequences[Index, table]["mid",  vector] = NewMiddle   
-    Sequences[Index, table]["dest", vector] = NewDestination   
+    local SuperTable = Sequences[Index, table]
+    
+    SuperTable["mid",  vector] = NewMiddle   
+    SuperTable["dest", vector] = NewDestination   
 }
 
 function void table:updateCubicPoints(Index:number, NewPointA:vector, NewPointB:vector, NewDestination:vector)
 {        
     local Sequences = This["sequences", table]
     
-    if(Sequences:count() == 0)
+    if(!Sequences:count())
     {
         return   
     }
@@ -146,9 +146,11 @@ function void table:updateCubicPoints(Index:number, NewPointA:vector, NewPointB:
         return   
     }
    
-    Sequences[Index, table]["point1",  vector] = NewPointA   
-    Sequences[Index, table]["point2",  vector] = NewPointB   
-    Sequences[Index, table]["dest",    vector] = NewDestination   
+    local SuperTable = Sequences[Index, table]
+
+    SuperTable["point1",  vector] = NewPointA   
+    SuperTable["point2",  vector] = NewPointB   
+    SuperTable["dest",    vector] = NewDestination   
 }
         
 # --- Initializers --- #
@@ -158,7 +160,7 @@ function void table:addLinearEntry(Sequence_Start:number, Sequence_End:number, D
     
     local T = This["sequences", table]
     
-    local Pos_In_Queue = max(T:count(), 0)
+    local Pos_In_Queue = T:count()
     
     T[Pos_In_Queue, table] = table("type" = "linear",
                                    "start" = Sequence_Start,
@@ -172,7 +174,7 @@ function void table:addBezierEntry(Sequence_Start:number, Sequence_End:number, M
     
     local T = This["sequences", table]
     
-    local Pos_In_Queue = max(T:count(), 0)
+    local Pos_In_Queue = T:count()
     
     T[Pos_In_Queue, table] = table("type" = "bezier",
                                    "start" = Sequence_Start,
@@ -187,7 +189,7 @@ function void table:addCubicEntry(Sequence_Start:number, Sequence_End:number, Po
     
     local T = This["sequences", table]
     
-    local Pos_In_Queue = max(T:count(), 0)
+    local Pos_In_Queue = T:count()
     
     T[Pos_In_Queue, table] = table("type" = "cubic",
                                    "start" = Sequence_Start,
@@ -256,7 +258,7 @@ function void table:insertCubicEntry(Index:number, Sequence_Start:number, Sequen
 function void table:runSequenceSession(Origin:vector, Execution_Counter:number)
 {
     # --- Initialization --- #
-    if(This:count() == 0)
+    if(!This:count())
     {
         return   
     }
@@ -279,7 +281,7 @@ function void table:runSequenceSession(Origin:vector, Execution_Counter:number)
             local CStart = CSeq["start", number]
             local CEnd   = CSeq["end", number]
    
-            if(Counter > CStart && Counter <= CEnd)
+            if(Counter > CStart & Counter <= CEnd)
             {
                 R["curSeq", number] = I
                 
@@ -301,7 +303,7 @@ function void table:runSequenceSession(Origin:vector, Execution_Counter:number)
     local Sequence = D[SequenceIndex, table]
     local Sequence_Type = D[SequenceIndex, table]["type", string]
     
-    if(SequenceIndex == 0)
+    if(!SequenceIndex)
     {
         CurStart = Origin # Without this the first sequence wouldnt have a start
     }
@@ -341,7 +343,7 @@ function void table:runSequenceSession(Origin:vector, Execution_Counter:number)
         break 
     }
             
-    if(Counter >= CurSeqAnimEnd || CounterTranslation >= 1) # Both of those have the same result. Using both makes errors less usual
+    if(Counter >= CurSeqAnimEnd | CounterTranslation >= 1) # Both of those have the same result. Using both makes errors less usual
     {
         R["prevEnd", vector] = R["animation", vector]  
     }
@@ -360,7 +362,7 @@ function void table:runSequenceSession(Origin:vector, Execution_Counter:number)
             local CStart = CSeq["start", number]
             local CEnd   = CSeq["end", number]
    
-            if(Counter > CStart && Counter <= CEnd)
+            if(Counter > CStart & Counter <= CEnd)
             {
                 R["curSeq", number] = I
                 
