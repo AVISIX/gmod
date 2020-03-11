@@ -11,7 +11,7 @@
 @trigger none 
 
 runOnFile(1)
-interval(1)
+interval(100)
 
 #User = owner()
 PrevCache = gTable(owner():name() + "codeviewerdatacache")
@@ -24,11 +24,11 @@ if( first() )
     ]#
         
     # [ --- Config --- ] #
-    BuildSpeed = 1
+    BuildSpeed = 100
     OtherSpeed = 1 # Better keep this at 1
     OpsLimit = 5000 #6500
     LineIndex = 1
-    FilePath = ">e2shared/codeviewer_-_final.txt" #">e2shared/base64.txt" #">e2shared/rtnig.txt"
+    FilePath = ">e2shared/base64.txt" #">e2shared/rtnig.txt" #">e2shared/codeviewer_-_final.txt" #
 
     Syntax = table(
         "preproc" = table(
@@ -45,7 +45,7 @@ if( first() )
     
         "keywords" = table(
                         "col" = vec(160,240,240),
-                        "words" = array("function", "continue", "foreach", "elseif", "return", "local", "break", "while", "case", "else", "for", "if")
+                        "words" = array("function", "continue", "foreach", "elseif", "return", "local", "break", "switch", "while", "case", "else", "for", "if")
                         ),
                         
         "uservariables" = table(
@@ -994,18 +994,30 @@ if( first() )
                     Progress = 0.3 + ((0.2 / Lines:count()) * LineCounter)   
 
                     local Count = Comments:count() > 0
+                    if(changed(Count) & Count)
+                    {
+                        writeConsole("High amount of Comments detected.\nInitiating slow sorting...")  
+                    } 
+
                     if(Count | Continue)
                     {    
                         if(Count)
                         {
-                            Comments = Comments:bubbleSort() 
-                        }           
-                          
-                        FileData["comments", array] = Comments   
-                                             
-                        writeConsole("Comments cached")
-                                
-                        resetAll()
+                            local Sorted = Comments:slothSort()   
+                            
+                            if(Sorted:count() > 0)
+                            {
+                                FileData["comments", array] = Sorted                                                    
+                                writeConsole("Comments cached")                                    
+                                resetAll()                                
+                            }
+                        }
+                        else
+                        {                                     
+                            FileData["comments", array] = Comments                                                    
+                            writeConsole("Comments cached")                                    
+                            resetAll()
+                        }
                     } 
                 }                
                 break
