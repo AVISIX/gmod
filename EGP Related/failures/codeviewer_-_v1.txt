@@ -1,0 +1,845 @@
+@name Codeviewer - V1
+@inputs Egp:wirelink
+@persist File:string IsLoading Displayed TotalTexts BuildSpeed FLines:array Temp:array LC OpsLimit LineCounter LineBuilder:string Defal [Constr CurDefault]:string [Sizes E2Colors AllData]:table 
+
+interval(100)
+
+if(first())
+{ 
+    BuildSpeed = 1
+    OpsLimit = 60000
+
+    E2Colors = table(
+        "keywords" = table(
+                        "col" = vec(160,240,240),
+                        "words" = array("if", "function", "foreach", "return", "local", "break", "case", "else", "for", "while")
+                        ),
+                            
+        "types" = table(
+                        "col" = vec(240,160,96),
+                        "words" = array("wirelink", "matrix2", "matrix", "matrix4", "string", "vector2", "vector4", "array", "table", "gtable", "gTable", "angle", "vector", "entity", "number", "void", "normal")
+                        ),
+                        
+        "preproc" = table(
+                        "col" = vec(240,240,160),
+                        "words" = array("@inputs", "@outputs", "@persist")
+                        ),
+                        
+        "uservalues" = table(
+                        "col" = vec(160, 240, 160)
+                        ),
+                        
+        "numbers" = table(
+                        "col" = vec(247,167,167)
+                        ),
+                        
+        "default" = vec(255)
+    )
+    
+    function array array:bubbleSort()
+    {
+        local Temp = This
+
+        for(A = 1, This:count())
+        {
+            for(B = 1, This:count() - 1)
+            {
+                if(Temp[B, string]:length() < Temp[B + 1, string]:length())
+                {
+                    local Store = Temp[B + 1, string]
+                    Temp[B + 1, string] = Temp[B, string] 
+                    Temp[B, string] = Store
+                }
+            }
+        }
+        
+        return Temp          
+    }
+
+    E2Colors["keywords", table]["words", array]:bubbleSort()
+    E2Colors["types", table]["words", array]:bubbleSort()
+    E2Colors["preproc", table]["words", array]:bubbleSort() # The Arrays have to go from longest word to smallest. Otherwise it will cause errors. Thats why I sort it here. (Yes bubblesort is dogshit)
+              
+    function void loadFile(Path:string)
+    {
+        fileLoad(Path)
+        IsLoading = 1        
+    }
+    
+    function number antiCrash()
+    {
+        return perf(100) & ops() < OpsLimit
+    }
+    
+    function number tryRead()
+    {
+        if(IsLoading == 1)
+        {
+            if(fileLoaded())
+            {
+                File = fileRead()
+                IsLoading = 0   
+                return 1
+            }   
+        }      
+        
+        return 0    
+    }
+    
+    function number isEmpty()
+    {
+        if(File:replaceRE("%s", "") == ""){ return 1 }               
+        return 0      
+    }
+    
+    function number string:isUpper()
+    {
+        local B = toByte(This)        
+        if(B >= 65 & B <= 90){ return 1 }            
+        return 0
+    }
+    
+    function number string:isLetter()
+    {
+        local B = toByte(This)      
+        if((B >= 65 & B <= 90) | (B >= 97 & B <= 122)){ return 1 }                  
+        return 0        
+    }
+    
+    function number string:isNumber()
+    {
+        local B = toByte(This)     
+        if(B >= 48 & B <= 57){ return 1 }                
+        return 0   
+    }
+    
+    function array getLines()
+    {
+        if(isEmpty()){ return array() }           
+        return File:explode("\n")
+    }
+
+    function string ws(Size)
+    {
+        local B = ""
+        for(I = 1, Size){ B += " " } 
+        return B 
+    }
+    
+    function void addLayout(Text:string, Col:vector)
+    {
+        Egp:egpTextLayout(TotalTexts, Text, vec2(5,5), vec2(9999))     
+        Egp:egpSize(TotalTexts, 14)
+        Egp:egpAlpha(TotalTexts, 255)
+        Egp:egpColor(TotalTexts, Col)  
+        Egp:egpFont(TotalTexts, "Courier New")      
+               
+        TotalTexts++   
+    }
+    
+    function void setProgress(Type:string, Current, Maximum)
+    {
+        local Percentage = floor((100 / Maximum) * Current, 1)
+        setName("Sixmax' Codeviewer Ver. 1 \nWorkload: " + Type + "\nProgress: " + Percentage + "%")   
+    }
+
+    function number string:comingCharsEqual(I, Word:string)
+    {
+        local Chars = This:explode("")  
+        local CharsB = Word:explode("")    
+        local Builder = ""
+        local Result = 0
+        for(N = I, Chars:count())
+        {
+            local Char = Chars[N, string]
+            
+            if(Char != CharsB[N - I + 1, string])
+            {
+                break   
+            }
+            
+            Builder += Char  
+
+            if(Builder:length() > CharsB:count())
+            {
+                break   
+            }
+            elseif(Builder == Word)
+            {
+                Result = 1 
+                break
+            }         
+        }     
+        
+        return Result   
+    }
+     
+    function string string:whiteoutEx(Input:array)
+    {
+        local Chars = This:explode("")
+        
+        local Result = ""
+        
+        local I = 1
+        while(I < Chars:count() + 1)
+        {
+            local Char = Chars[I, string]
+               
+            if(Char != " ")
+            {
+                local StepSize = 1
+                local Constructor = " "
+
+                foreach(X, Valid:string = Input)
+                {
+                    if(This:comingCharsEqual(I, Valid))
+                    {
+                        Constructor = Valid
+                        StepSize = Constructor:length()
+                        break   
+                    }
+                }     
+            
+                Result += Constructor   
+                I += StepSize  
+            }
+            else
+            {
+                Result += " "
+                I++   
+            }
+        } 
+        
+        return Result
+    }
+    
+    function number string:isPreprocLine()
+    {
+        local Chars = This:explode("")
+        
+        for(I = 1, Chars:count())
+        {
+            local CChar = Chars[I, string]
+            
+            if(CChar != " ")
+            {
+                if(CChar == "@")
+                {
+                    return 1   
+                }   
+                else
+                {
+                    return 0   
+                }
+            }  
+        }  
+        
+        return 0
+    }
+    
+    function string string:getPreprocType()
+    {
+        local Result = ""
+        
+        if(This:isPreprocLine())
+        {
+            if(This:find("@name"))
+            {
+                return "name"
+            }        
+            elseif(This:find("@outputs"))
+            {
+                return "out"
+            }
+            elseif(This:find("@inputs"))
+            {
+                return "in"   
+            }
+            elseif(This:find("@trigger"))
+            {
+                return "trigger"   
+            }
+            elseif(This:find("@model"))
+            {
+                return "model"   
+            }
+            else
+            {
+                return "nil"   
+            }
+        }   
+    
+        return Result
+    }
+    
+    function string string:whiteoutExUpper()
+    {
+        local Result = ""
+        
+        local Chars = This:explode("")
+        local Builder = ""
+        local InUpper = 0
+        local PrevChar = ""
+  
+        for(I = 1, Chars:count())
+        {
+            local Char = Chars[I, string]  
+               
+            if(InUpper == 0)
+            {
+                if(Char:isUpper())
+                {
+                    if(!PrevChar:isNumber() & !PrevChar:isLetter())
+                    {
+                        InUpper = 1      
+                    }    
+                } 
+            }
+            
+            if(InUpper)
+            {
+                if(!Char:isLetter() & !Char:isNumber())
+                {
+                    InUpper = 0
+                    Builder += " "
+                    PrevChar = Char   
+                    continue
+                }
+
+                Builder += Char   
+            }
+            else
+            {
+                Builder += " "   
+            }
+       
+            PrevChar = Char
+        }
+        
+        Result = Builder    
+        
+        return Result   
+    }
+    
+    function string array:whiteoutExIntegersLine()
+    {        
+        local LineBuilder = ""
+        local InWord = 0
+        foreach(L, Char:string = This)
+        {
+            if(Char:isLetter())
+            {
+                InWord = 1
+            }
+            
+            if(!Char:isLetter() & !Char:isNumber())
+            {
+                InWord = 0   
+            }     
+             
+            if(InWord)
+            {
+                LineBuilder += " "   
+            }
+            else
+            {
+                if(Char:isNumber())
+                {
+                    LineBuilder += Char   
+                }   
+                else
+                {
+                    LineBuilder += " "   
+                }
+            }
+        }    
+    
+        return LineBuilder 
+    }
+    
+    function string string:whiteoutExIntegers()
+    {
+        local Result = ""
+        
+        local Lines = This:explode("\n")
+        
+        foreach(I, Line:string = Lines)
+        {
+            local Chars = Line:explode("")
+            Result += Chars:whiteoutExIntegersLine() + "\n"
+        }   
+        
+        return Result
+    }
+    
+    function string string:removeLoneNumbers()
+    {
+        local Chars = This:explode("")
+        local Result = ""
+        local InWord = 0
+        for(I = 1, Chars:count())
+        {
+            local Char = Chars[I, string]
+            
+            if(!InWord)
+            {
+                if(Char:isLetter())
+                {
+                    InWord = 1      
+                }
+            }
+            
+            if(InWord)
+            {
+                if(!Char:isLetter() & !Char:isNumber())
+                {
+                    InWord = 0   
+                }
+            }
+            else
+            {
+                Char = " "
+            }    
+            
+            Result += Char
+        }
+        
+        return Result   
+    }
+    
+    function string string:removeUpper()
+    {
+        local Chars = This:explode("")
+        local Builder = ""
+        local InUpper = 0
+        local PrevChar = ""
+  
+        for(I = 1, Chars:count())
+        {
+            local Char = Chars[I, string]  
+               
+            if(InUpper == 0)
+            {
+                if(Char:isUpper())
+                {
+                    if(!PrevChar:isNumber() & !PrevChar:isLetter())
+                    {
+                        InUpper = 1      
+                    }    
+                } 
+            }
+            
+            if(InUpper)
+            {
+                if(!Char:isLetter() & !Char:isNumber())
+                {
+                    InUpper = 0
+                    Builder += Char
+                    PrevChar = Char   
+                    continue
+                }
+
+                Builder += " "   
+            }
+            else
+            {
+                Builder += Char   
+            }
+       
+            PrevChar = Char
+        }
+        
+        return Builder               
+    }
+    
+    function number string:wtfWire(B:string)
+    {
+        if(This == B){ return 0 }
+        return 0   
+    }
+    
+    function string array:updateWorkload()
+    {
+           
+    }
+    
+    function string string:getTextExcludingColorE2Colors()
+    {
+        timer("defaultBuilder", BuildSpeed)
+        
+        local Result = ""
+        
+        switch(Defal)
+        {
+            default,
+                CurDefault = This                            
+                Defal = 1
+                LineBuilder = ""
+                LineCounter = 1
+                   
+                setProgress("Initialization", 1, 1)
+            break   
+            
+            case 1,   
+                if(!CurDefault:find("@name") & !CurDefault:find("@trigger") & !CurDefault:find("@model"))                               
+                {
+                    LineBuilder = ""
+                    LineCounter = 1 
+                    Defal = 2      
+                    break                            
+                }
+                
+                local TempL = CurDefault:explode("\n")
+                
+                timer("lineTimer", BuildSpeed)
+                
+                if(clk("lineTimer") & antiCrash())
+                {        
+                    local Line = TempL[LineCounter, string]
+                    
+                    local Type = Line:getPreprocType()
+                    
+                    if(Type == "name" | Type == "model" | Type == "trigger")
+                    {
+                        LineBuilder += "\n"                
+                    }               
+                    else
+                    {
+                        LineBuilder += Line + "\n"   
+                    }     
+                          
+                    LineCounter++    
+                }                  
+                 
+                setProgress("Preprocessor removal 1", LineCounter, TempL:count())
+                
+                if(LineCounter >= TempL:count())
+                {
+                    stoptimer("lineTimer")
+                    CurDefault = LineBuilder
+                    LineBuilder = ""
+                    LineCounter = 1 
+                    Defal = 2               
+                }
+                                                  
+            break
+            
+            case 2,
+                local Words = E2Colors["preproc", table]["words", array]    
+                foreach(I, Word:string = Words)
+                {
+                    CurDefault = CurDefault:replace(Word, ws(Word:length()))   
+                }
+
+                setProgress("Preprocessor removal 2", 1, 1)
+                
+                Defal = 3    
+            break
+            
+            case 3,
+                foreach(A, Keys:string = E2Colors:keys())
+                {
+                    if(Keys != "types" & 
+                        Keys != "keywords")
+                    {
+                        continue   
+                    }
+                    
+                    local Words = E2Colors[Keys, table]["words", array]
+                    
+                    foreach(B, Word:string = Words)
+                    {
+                        CurDefault = CurDefault:replace(Word, ws(Word:length()))       
+                    }
+                }      
+
+                setProgress("Keyword removal", 1, 1)
+
+                Defal = 4              
+            break
+            
+            case 4,
+                local TempL = CurDefault:explode("\n")
+                
+                timer("lineTimer", BuildSpeed)
+                
+                if(clk("lineTimer") & antiCrash())
+                {        
+                    local Line = TempL[LineCounter, string]                    
+                    LineBuilder += Line:removeUpper() + "\n"
+                    LineCounter++
+                }
+
+                setProgress("Uppercase removal", LineCounter, TempL:count())
+                
+                if(LineCounter >= TempL:count())
+                {
+                    CurDefault = LineBuilder
+                    LineBuilder = ""
+                    LineCounter = 1 
+                    Defal = 5               
+                }              
+            break
+            
+            case 5,
+                local TempL = CurDefault:explode("\n")
+                
+                timer("lineTimer", BuildSpeed)
+                
+                if(clk("lineTimer") & antiCrash())
+                {    
+                    local Line = TempL[LineCounter, string]     
+                       
+                    if(!Line:isPreprocLine())
+                    {
+                        LineBuilder += Line:replaceRE("[0-9]", " ") + "\n"       
+                    }   
+                    else
+                    {
+                        LineBuilder += "\n"
+                    }
+                    
+                    LineCounter++                    
+                }
+
+                setProgress("Number removal", LineCounter, TempL:count())
+                
+                if(LineCounter >= TempL:count())
+                {
+                    CurDefault = LineBuilder
+                    LineBuilder = ""
+                    LineCounter = 1 
+                    Defal = 6           
+                    
+                    Result = CurDefault    
+                }      
+            break
+        }
+           
+        return Result
+    }
+    
+    function string getTextEx(Dict:table, Name:string)
+    {
+        local Result = ""
+    
+        local Lines = getLines()
+        
+        timer("pooper", BuildSpeed)      
+         
+        if(clk("pooper") & antiCrash())
+        {
+            local Line = ""
+            
+            local CurLine = Lines[LC + 1, string]
+            
+            if(Dict != E2Colors["preproc", table])
+            {
+                Line = Lines[LC + 1, string]:whiteoutEx(Dict["words", array])
+            }
+            else
+            {
+                # [ --- Extras for preprocessor --- ] #
+                local Type = CurLine:getPreprocType()
+                
+                if(Type == "name" | Type == "trigger" | Type == "model")
+                {
+                    Line = Lines[LC + 1, string]       
+                }
+                else
+                {
+                    Line = Lines[LC + 1, string]:whiteoutEx(Dict["words", array])          
+                }
+            }
+                   
+            Temp:pushString(Line) 
+            
+            LC = min(LC + 1, Lines:count())
+        }
+         
+        setProgress(Name, LC, Lines:count())
+        
+        if(LC >= Lines:count())
+        {
+            local TempB = ""
+            
+            foreach(P, Line:string = Temp)
+            {
+                TempB += Line + "\n"   
+            }
+                                
+            LC = 0
+            Temp = array()
+            stoptimer("pooper")
+            
+            return TempB
+        }        
+        
+        return Result   
+    }
+    
+    local Path = ">e2shared/testingText.txt"    
+    
+    loadFile(Path)
+    
+    TotalTexts = 1
+}
+
+Status = tryRead()
+                         
+if(changed(Egp:entity()) & Egp:entity())
+{
+    Egp:egpClear()
+    Egp:egpDrawTopLeft(1)
+}
+
+if(Egp:entity():isValid())
+{    
+    if(changed(!IsLoading) & !IsLoading)
+    {
+        FLines = getLines()       
+    }
+    
+    if(IsLoading == 0)
+    {
+        switch(Constr)
+        {
+            default,
+                Constr = "brest"
+                
+                if(BuildSpeed == 0)
+                {
+                    BuildSpeed = FLines:count() / 7    
+                }
+                
+                hint("Loading...", 3)
+            break   
+            
+            case "brest",
+                local Rest = File:getTextExcludingColorE2Colors()
+                
+                if(Rest != "")
+                {
+                    addLayout(Rest, E2Colors["default", vector])
+                    hint("Defaults loaded", 3)
+                    Constr = "keywords"
+                }
+            break
+            
+            case "keywords",
+                local KWT = E2Colors["keywords", table]
+                local KeyWords = getTextEx(KWT, "Keyword Construction")
+                
+                if(KeyWords != "")
+                {
+                    addLayout(KeyWords, KWT["col", vector])
+                    hint("Keywords loaded", 3)
+                    LineCounter = 1
+                    Constr = "types"    
+                }
+            break
+            
+            case "types",
+                local KWT = E2Colors["types", table]
+                local KeyWords = getTextEx(KWT, "Type Construction")
+                
+                if(KeyWords != "")
+                {
+                    addLayout(KeyWords, KWT["col", vector])
+                    hint("Types loaded", 3)
+                    LineCounter = 1
+                    LineBuilder = ""
+                    Constr = "preproc"    
+                }                           
+            break
+            
+            case "preproc",
+                local KWT = E2Colors["preproc", table]
+                local KeyWords = getTextEx(KWT, "Preprocessor Construction")
+                
+                if(KeyWords != "")
+                {
+                    addLayout(KeyWords, KWT["col", vector])
+                    hint("Preprocessor loaded", 3)
+                    LineCounter = 1
+                    LineBuilder = ""
+                    Constr = "uppers"    
+                }     
+            break
+            
+            case "uppers",
+                local KWT = E2Colors["uservalues", table]
+                
+                timer("lineTimer", BuildSpeed)
+                      
+                if(clk("lineTimer") & antiCrash())
+                {    
+                    local Line = FLines[LineCounter, string]
+                    
+                    if(Line:isPreprocLine())
+                    {
+                        local Type = Line:getPreprocType()
+                        
+                        if(Type == "name" | Type == "trigger" | Type == "model")
+                        {
+                            LineBuilder += "\n"   
+                        }
+                        else
+                        {
+                            LineBuilder += Line:whiteoutExUpper() + "\n"    
+                        }
+                    }
+                    else
+                    {
+                        LineBuilder += Line:whiteoutExUpper() + "\n"
+                    }                    
+                    
+                    LineCounter++
+                }
+
+                setProgress("Uppercase Construction", LineCounter, FLines:count())
+                
+                if(LineCounter >= FLines:count())
+                {
+                    hint("Uservalues loaded", 3)
+                    addLayout(LineBuilder, KWT["col", vector])   
+                    LineCounter = 1
+                    LineBuilder = ""
+                    Constr = "numbers"                        
+                }         
+            break
+            
+            case "numbers",
+                local KWT = E2Colors["numbers", table]
+                
+                timer("lineTimer", BuildSpeed)
+                      
+                if(clk("lineTimer") & antiCrash())
+                {
+                    local Line = FLines[LineCounter, string]
+                    LineBuilder += Line:whiteoutExIntegers()
+                    LineCounter++
+                }         
+
+                setProgress("Number Construction", LineCounter, FLines:count())
+
+                if(LineCounter >= FLines:count())
+                {
+                    hint("Numbers loaded", 3)
+                    addLayout(LineBuilder, KWT["col", vector])   
+                    LineCounter = 1
+                    LineBuilder = ""
+                    Constr = "display"                        
+                }
+            break 
+            
+            case "display",
+                if(!Displayed)
+                {
+                    setProgress("None", 1, 1)
+                    Displayed = 1  
+                } 
+            break
+        }
+    }
+}
