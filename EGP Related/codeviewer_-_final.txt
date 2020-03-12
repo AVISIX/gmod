@@ -1,7 +1,7 @@
 @name Codeviewer - Final
 @inputs EGP:wirelink
 @persist BuildSpeed OpsLimit LineIndex SlothDone SlothStep SlothSwapped IsLoading TotalTexts LineNumLen LineCounter InsideString Yield Stepper Evaluated ReadyToEvaluate ReadyToShow StringProgress 
-@persist Continue OtherSpeed CurProgress DisplaySteps FuncsRetrieved DisplayingProg PrevY PrevLine PrevInd
+@persist Continue OtherSpeed CurProgress DisplaySteps FuncsRetrieved DisplayingProg PrevY PrevLine PrevInd FontSize
 @persist [FilePath StringBuilder FileContent CommentType CommentBuilder TextBuilder Console CurrentSnippet SnippetCopy]:string
 @persist [Syntax FileData]:table
 @persist [SlothCopy LineBuilder FileLines CommentCollection VariableCollection FuncCollection]:array
@@ -26,9 +26,10 @@ if( first() )
     # [ --- Config --- ] #
     BuildSpeed = 100
     OtherSpeed = 1 # Better keep this at 1
-    OpsLimit = 5000 #6500
+    OpsLimit = 8000 #6500
     LineIndex = 1
-    FilePath = ">e2shared/base64.txt" #">e2shared/rtnig.txt" #">e2shared/codeviewer_-_final.txt" #
+    FilePath = ">e2shared/ShowCode_V2.txt"
+    FontSize = 15
 
     Syntax = table(
         "preproc" = table(
@@ -309,7 +310,7 @@ if( first() )
     function void newText(Index, Text:string, Col:vector)
     {       
         EGP:egpTextLayout(Index, Text, vec2(LineNumLen + 25,5), vec2(9999))     
-        EGP:egpSize(Index, 12)
+        EGP:egpSize(Index, FontSize)
         EGP:egpAlpha(Index, 255)
         EGP:egpColor(Index, Col)  
         EGP:egpFont(Index, "Lucida Console") #"Courier New")      
@@ -1462,9 +1463,9 @@ if(fileLoaded())
                   
             local ClampedPos = vec2()
 
-            if(Pos[2] > PrevY + 12 | Pos[2] < PrevY - 12)
+            if(Pos[2] > PrevY + FontSize | Pos[2] < PrevY - FontSize)
             {    
-                LineIndex = max(floor((-Pos[2]) / 12) + 1, 1) 
+                LineIndex = max(floor((-Pos[2]) / FontSize) + 1, 1) 
                 ClampedPos[2] = Pos[2]  
                 PrevY = ClampedPos[2]  
             }
@@ -1486,7 +1487,7 @@ if(fileLoaded())
             {
                 local IndiciatorPos = round(Cursor[2])
                 
-                if(IndiciatorPos > PrevInd + 12 | IndiciatorPos < PrevInd - 12)
+                if(IndiciatorPos > PrevInd + FontSize | IndiciatorPos < PrevInd - FontSize)
                 {
                     IndiciatorPos = Cursor[2] + 1
                     PrevInd = IndiciatorPos 
@@ -1516,7 +1517,7 @@ if(fileLoaded())
         {
             if(LineIndex != PrevLine)
             {
-                CurrentSnippet = FileLines:getTextSnippet(LineIndex, LineIndex + 41)
+                CurrentSnippet = FileLines:getTextSnippet(LineIndex, LineIndex + 500 / FontSize)
                 reloadScript()   
             }
             
@@ -1531,7 +1532,7 @@ if(fileLoaded())
     
     if(changed(Evaluated) & Evaluated)
     {
-        CurrentSnippet = FileLines:getTextSnippet(LineIndex, LineIndex + 41)
+        CurrentSnippet = FileLines:getTextSnippet(LineIndex, LineIndex + 500 / FontSize)
         hideConsole()
         hideLoading()
         CurProgress = 0
