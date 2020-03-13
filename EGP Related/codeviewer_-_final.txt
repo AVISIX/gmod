@@ -1,34 +1,39 @@
 @name Codeviewer - Final
 @inputs EGP:wirelink
 @persist BuildSpeed OpsLimit LineIndex SlothDone SlothStep SlothSwapped IsLoading TotalTexts LineNumLen LineCounter InsideString Yield Stepper Evaluated ReadyToEvaluate ReadyToShow StringProgress 
-@persist Continue OtherSpeed CurProgress DisplaySteps FuncsRetrieved DisplayingProg PrevY PrevLine PrevInd
-@persist [FilePath StringBuilder FileContent CommentType CommentBuilder TextBuilder Console CurrentSnippet SnippetCopy]:string
+@persist Continue OtherSpeed CurProgress DisplaySteps FuncsRetrieved DisplayingProg PrevY PrevLine PrevInd Fontsize
+@persist [FilePath StringBuilder FileContent CommentType CommentBuilder TextBuilder Console CurrentSnippet SnippetCopy ChatPrefix]:string
 @persist [Syntax FileData]:table
-@persist [SlothCopy LineBuilder FileLines CommentCollection VariableCollection FuncCollection]:array
-@persist [PrevCache]:gtable
+@persist [SlothCopy LineBuilder FileLines CommentCollection VariableCollection FuncCollection Whitelist]:array
+@persist [ ]:gtable
 @persist [User]:entity
 @persist [Cursor OldTextPos TextPos OldCursor]:vector2
 @trigger none 
 
+runOnChat(1)
 runOnFile(1)
 interval(100)
-
-#User = owner()
-PrevCache = gTable(owner():name() + "codeviewerdatacache")
 
 if( first() )
 {
     # [ --- To Do --- ] #
     #[
-        Add Line numbers and Goto-line command (chat)
+        - Add Coloring via Chat 
+        - Fix shitty type bug -.-
+        - clean it the fuck up
+        - make new sort that doesnt use for loops to iterate through items
+        - add /open command for the owner to open a new file
+        - prebuild text shit, so dont need to recreate it all the time. <--- big important 
     ]#
         
     # [ --- Config --- ] #
-    BuildSpeed = 100
+    ChatPrefix = "/"
+    BuildSpeed = 250
     OtherSpeed = 1 # Better keep this at 1
-    OpsLimit = 5000 #6500
+    OpsLimit = 3500 #6500
     LineIndex = 1
-    FilePath = ">e2shared/base64.txt" #">e2shared/rtnig.txt" #">e2shared/codeviewer_-_final.txt" #
+    Fontsize = 13
+    FilePath = ">e2shared/base64.txt" #">e2shared/codeviewer_-_final.txt" #
 
     Syntax = table(
         "preproc" = table(
@@ -45,7 +50,7 @@ if( first() )
     
         "keywords" = table(
                         "col" = vec(160,240,240),
-                        "words" = array("function", "continue", "foreach", "elseif", "return", "local", "break", "switch", "while", "case", "else", "for", "if")
+                        "words" = array("function", "continue", "foreach", "default", "elseif", "return", "local", "break", "switch", "while", "case", "else", "for", "if")
                         ),
                         
         "uservariables" = table(
@@ -54,7 +59,7 @@ if( first() )
                             
         "types" = table(
                         "col" = vec(240,160,96),
-                        "words" = array("wirelink", "matrix2", "matrix", "matrix4", "string", "vector2", "vector4", "array", "table", "gtable", "gTable", "angle", "vector", "entity", "number", "void", "normal", "bone", "quaternion")
+                        "words" = array("wirelink", "matrix2", "matrix", "matrix4", "gtable", "string", "vector2", "vector4", "array", "table", "gtable", "gTable", "angle", "vector", "entity", "number", "void", "normal", "bone", "quaternion")
                         ),
                         
         "numbers" = table(
@@ -132,6 +137,26 @@ if( first() )
         return Temp          
     }
 
+    function table table:bubbleSort()
+    {
+        local Temp = This
+
+        for(A = 1, This:count())
+        {
+            for(B = 1, This:count() - 1)
+            {
+                if(Temp[B, table]["distance", number] < Temp[B + 1, table]["distance", number])
+                {
+                    local Store = Temp[B + 1, table]
+                    Temp[B + 1, table] = Temp[B, table] 
+                    Temp[B, table] = Store
+                }
+            }
+        }
+        
+        return Temp          
+    }
+
     function number prevention()
     {
         return perf(50) & ops() < OpsLimit   
@@ -141,7 +166,66 @@ if( first() )
     SlothStep = -1
     SlothCopy = array()
     SlothSwapped = -1   
-    function array array:slothSort() # combSort but slow
+    function array array:slothSortA() # combSort but slow
+    {
+        if(SlothStep == -1 | !SlothCopy:count() | SlothSwapped == -1)
+        {
+            SlothDone = 0
+            SlothStep = This:count()  
+            SlothCopy = This    
+            SlothSwapped = 1   
+        }
+        
+        if(prevention())
+        {
+            if(clk("sloth"))
+            {            
+                if(SlothSwapped | SlothStep > 1)
+                {
+                    SlothSwapped = 0
+                    
+                    for(I = 1, SlothCopy:count() - SlothStep + 1)
+                    {
+                        if(SlothCopy[I + 1, string]:length() > SlothCopy[I, string]:length())
+                        {
+                            local Store = SlothCopy[I + 1, string]
+                            SlothCopy[I + 1, string] = SlothCopy[I, string]
+                            SlothCopy[I, string] = Store
+                            SlothSwapped = 1   
+                        }       
+                    }    
+                    
+                    if(SlothStep > 1)
+                    {
+                        SlothStep = SlothStep / 1.3   
+                    }
+                }
+                
+                if(SlothSwapped == 0 & SlothStep < 1)
+                {
+                    SlothDone = 1    
+                }
+                else
+                {
+                    timer("sloth", 10)   
+                }
+            }
+            else
+            {
+                timer("sloth", 10)                  
+            }
+        }
+        
+        if(SlothDone)
+        {       
+            SlothStep = -1
+            return SlothCopy   
+        }             
+        
+        return array() 
+    }
+
+    function array array:slothSortB() # combSort but slow
     {
         if(SlothStep == -1 | !SlothCopy:count() | SlothSwapped == -1)
         {
@@ -188,6 +272,68 @@ if( first() )
         
         return array() 
     }
+    
+    function array array:slothSort()
+    {
+        if(This:count() > 50)
+        {
+            return This:slothSortA()    
+        }
+        elseif(This:count() > 10)
+        {
+            return This:slothSortB()   
+        }
+        else
+        {
+            return This:combSort()   
+        }   
+    }
+
+    function number chat(Command:string)
+    {
+        local Result = chatClk(User) & User:lastSaid():explode(" ")[1, string] == (ChatPrefix + Command)
+        if(User == owner() & Result){ hideChat(1) }
+        return Result
+    }
+    
+    function number oChat(Command:string)
+    {
+        local Result = chatClk(owner()) & owner():lastSaid():explode(" ")[1, string] == (ChatPrefix + Command)
+        if(Result){ hideChat(1) }
+        return Result           
+    }
+
+    Whitelist = array()
+    function void whitelistUser(Player:string)
+    {
+        Whitelist:pushString(Player)
+    }
+    
+    function void blacklistUser(Player:string)
+    {
+        local Copy = array()
+        foreach(W, Whitelisted:entity = Whitelist)
+        {
+            if(Whitelisted:steamID() != Player)
+            {
+                Copy:pushString(Whitelisted:steamID())   
+            }   
+        }
+        Whitelist = Copy
+    }
+    
+    function number onWhitelist(Player:string)
+    {
+        for(I = 1, Whitelist:count())
+        {
+            if(Whitelist[I, string] == Player)
+            {
+                return 1
+            }   
+        }       
+                
+        return 0
+    }
 
     function number getProgress(Percent)
     {
@@ -219,7 +365,7 @@ if( first() )
     
     function number useDown()
     {
-        if(User:keyUse())  
+        if(User:keyUse() & User:aimEntity() == EGP:entity())  
         {
             return 1   
         }
@@ -308,8 +454,8 @@ if( first() )
 
     function void newText(Index, Text:string, Col:vector)
     {       
-        EGP:egpTextLayout(Index, Text, vec2(LineNumLen + 25,5), vec2(9999))     
-        EGP:egpSize(Index, 12)
+        EGP:egpTextLayout(Index, Text, vec2(6 + LineNumLen, 5 ), vec2(9999))     
+        EGP:egpSize(Index, Fontsize)
         EGP:egpAlpha(Index, 255)
         EGP:egpColor(Index, Col)  
         EGP:egpFont(Index, "Lucida Console") #"Courier New")      
@@ -397,10 +543,10 @@ if( first() )
     }
 
     function vector col4Key(Key:string)
-    {
-        if(!Syntax:exists(Key))
+    {  
+        if(Key == "nil")
         {
-            return Syntax["default", vector]      
+            return Syntax["default", vector]   
         }
         
         return Syntax[Key, table]["col", vector]
@@ -408,11 +554,6 @@ if( first() )
         
     function array words4Key(Key:string)
     {
-        if(!Syntax:exists(Key))
-        {
-            return array()
-        }        
-        
         return Syntax[Key, table]["words", array]
     }
 
@@ -436,27 +577,28 @@ if( first() )
 
     function string string:getPreprocType()
     {      
-        if(This:sub(1,2) == "@n")
+        local Sub = This:sub(1,2)   
+        if(Sub == "@n")
         {
             return "name"
         }        
-        elseif(This:sub(1,2) == "@t")
+        elseif(Sub == "@t")
         {
             return "trigger"   
         }
-        elseif(This:sub(1,2) == "@m")
+        elseif(Sub == "@m")
         {
             return "model"   
         }
-        elseif(This:sub(1,2) == "@o")
+        elseif(Sub == "@o")
         {
             return "outputs"
         }
-        elseif(This:sub(1,2) == "@i")
+        elseif(Sub == "@i")
         {
             return "inputs"   
         }
-        elseif(This:sub(1,2) == "@p")
+        elseif(Sub == "@p")
         {
             return "persist"   
         }        
@@ -554,11 +696,11 @@ if( first() )
                             
                             if(PrevChar == "]")
                             {
-                                #CommentCollection:pushString(CommentBuilder) 
                                 if(!CommentCollection:exists(CommentBuilder))
                                 {
                                     CommentCollection:pushString(CommentBuilder)       
                                 }
+                                
                                 CommentBuilder = "" 
                                 CommentType = "nil"                               
                             } 
@@ -569,7 +711,7 @@ if( first() )
                 
                 if(CommentType == "single")
                 {
-                    #CommentCollection:pushString(CommentBuilder) # A single comment can only be in 1 line, so reset everything when a new line starts, but save the comment.
+                    # A single comment can only be in 1 line, so reset everything when a new line starts, but save the comment.
                     if(!CommentCollection:exists(CommentBuilder))
                     {
                         CommentCollection:pushString(CommentBuilder)       
@@ -796,7 +938,7 @@ if( first() )
         
         foreach(A, Word:string = This)
         {
-            Result:pushString(Word:replaceRE(Input, " "))
+            Result:pushString(Word:replaceRE(Input, ""))
         }   
         
         return Result
@@ -804,7 +946,7 @@ if( first() )
     
     function array string:gfindEnums()
     {
-        return This:gmatch("[(|:|%s|]*_[A-Z]*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*", 1):toArr()
+        return This:gmatch("[(|:|%s|]*_[A-Z]*[A-Z0-9]+_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*_*[A-Z0-9]*", 1):toArr()
     }
 
     function string string:removeNumbers()
@@ -878,25 +1020,6 @@ if( first() )
         
         return ""      
     }
-    
-    function void gCache(Filename:string)
-    {
-        PrevCache["name", table] = table(Filename)
-        foreach(K, Key:string = FileData:keys())
-        {
-            PrevCache[Key, array] = FileData[Key, array]   
-        }        
-    }
-    
-    function table loadGCache()
-    {
-        local Result = table()
-        foreach(K, Key:string = FileData:keys())
-        {
-            Result[Key, array] = PrevCache[Key, array]
-        }        
-        return Result
-    }
 
     function void resetAll()
     {
@@ -905,7 +1028,7 @@ if( first() )
         LineBuilder = array()
         StringBuilder = ""        
         Continue = 0
-        LineCounter = 0
+
         CommentType = "nil"
         CommentBuilder = ""
         CommentCollection = array()
@@ -922,15 +1045,12 @@ if( first() )
     {
         local Progress = 0 # Von 0 -> 1
         
-        # File lesen und alle variabeln, comments, userfunctions, e2functions, enums, preproc lines & strings cachen.
-        # Prozess kann lange dauern. Also mit return type den Progress angeben
-        
         if((clk("eval") | Yield) & prevention())
         {
             switch(Stepper)
             {
                 case 0,
-                if(1) # I put this into if(1) to maintain structure + release memory after done. Otherwise, it wont get released.
+                if(1)
                 {
                     local Preproc = Lines:findPreprocSnippets()   
                     
@@ -959,9 +1079,9 @@ if( first() )
                     local Count = Strings:count() > 0               
                     if(Count | Continue)
                     {
-                        if(changed(Count) & Count)
+                        if(changed(Strings:count() > 75) & Strings:count() > 75)
                         {
-                            writeConsole("High amount of Strings detected.\nInitiating slow sorting...")  
+                            writeConsole("High amount of Strings("+Strings:count()+") detected.\nInitiating slow sorting...")  
                         } 
                     
                         if(Count)
@@ -994,9 +1114,9 @@ if( first() )
                     Progress = 0.3 + ((0.2 / Lines:count()) * LineCounter)   
 
                     local Count = Comments:count() > 0
-                    if(changed(Count) & Count)
+                    if(changed(Comments:count() > 75) & Comments:count() > 75)
                     {
-                        writeConsole("High amount of Comments detected.\nInitiating slow sorting...")  
+                        writeConsole("High amount("+Comments:count()+") of Comments detected.\nInitiating slow sorting...")  
                     } 
 
                     if(Count | Continue)
@@ -1021,8 +1141,21 @@ if( first() )
                     } 
                 }                
                 break
-            
+
                 case 3,
+                if(1)
+                {
+                    FileData["enums", array] = Content:gfindEnums()
+                    if(FileData["enums", array]:count() > 1)
+                    {
+                        FileData["enums", array] = FileData["enums", array]:removeDuplicates():removeFromeach("[%(|:|%s| ]"):bubbleSort()
+                    }
+                    Progress = 0.55
+                    writeConsole("Enums cached")                
+                }
+                break
+            
+                case 4,
                 if(1)
                 {
                     Yield = 1                
@@ -1036,9 +1169,10 @@ if( first() )
                             local VarsInLine = Line:gfindVariables()                            
                             foreach(V, Var:string = VarsInLine)
                             {
-                                if(!VariableCollection:exists(Var) & Var:sub(1,1) != "_")
+                                local FixedVar = Var:replace(":", "")
+                                if(!VariableCollection:exists(FixedVar) & FixedVar:sub(1,1) != "_")
                                 {
-                                    VariableCollection:pushString(Var) 
+                                    VariableCollection:pushString(FixedVar) 
                                 }   
                             }                                                    
                             Faster = 0
@@ -1046,9 +1180,7 @@ if( first() )
                         
                         LineCounter++                
                         
-                        Progress = 0.55 + ((0.2 / Lines:count()) * LineCounter)        
-                                                                                                        
-                        timer("vbl", Faster ? 1 : OtherSpeed)                
+                        Progress = 0.55 + ((0.2 / Lines:count()) * LineCounter)                
                     }
 
                     if(LineCounter >= Lines:count())
@@ -1059,7 +1191,7 @@ if( first() )
                             local Sta = VariableCollection:count() > 30                                
                             if(changed(Sta) & Sta)
                             {
-                                writeConsole("High amount of Variables detected.\nInitiating slow sorting...")
+                                writeConsole("High amount("+VariableCollection:count()+") of Variables detected.\nInitiating slow sorting...")
                             }
                             
                             if(Sorted:count() > 0)
@@ -1078,22 +1210,37 @@ if( first() )
                     }                                                   
                 }
                 break
+
+                case 5,
+                FileData["userfunctions", array] = Content:gfindUserFunctions()    
+                Progress = 0.7825                
+                break
                 
-                case 4,
+                case 6,
                 if(1)
-                {
-                    FileData["userfunctions", array] = Content:gfindUserFunctions()                                
+                {                         
                     if(FileData["userfunctions", array]:count() > 1)
                     {
-                        FileData["userfunctions", array] = FileData["userfunctions", array]:bubbleSort()       
+                        local Temp = FileData["userfunctions", array]:slothSort()       
+                        
+                        if(Temp:count() > 0)
+                        {
+                            FileData["userfunctions", array] = Temp    
+                            Progress = 0.80                      
+                            writeConsole("Userfunctions cached")
+                            resetAll()
+                        }
                     }
-                    Progress = 0.80                      
-                    writeConsole("Userfunctions cached")
-                    resetAll()
+                    else
+                    {
+                        Progress = 0.80                      
+                        writeConsole("Userfunctions cached")
+                        resetAll()
+                    }
                 }
                 break
                 
-                case 5,
+                case 7,
                 if(1)
                 {
                     if(!FuncsRetrieved)
@@ -1112,11 +1259,11 @@ if( first() )
                     
                     if(FuncsRetrieved)
                     {                    
-                        local Stas = FileData["e2functions", array]:count() > 10
+                        local Stas = FileData["e2functions", array]:count() > 20
                         
                         if(changed(Stas) & Stas)
                         {
-                            writeConsole("High amount of E2Functions detected.\nInitiating slow sorting...")       
+                            writeConsole("High amount("+FileData["e2functions", array]:count()+") of E2Functions detected.\nInitiating slow sorting...")       
                         }
                         
                         if(Stas)
@@ -1144,7 +1291,7 @@ if( first() )
                 }
                 break
                 
-                case 6,
+                case 8,
                     local Result = array()
                     foreach(T, Tem:string = FileData["e2functions", array])
                     {
@@ -1157,21 +1304,8 @@ if( first() )
                     Progress = 0.95
                     writeConsole("Caching check completed")
                 break
-        
-                case 7,
-                if(1)
-                {
-                    FileData["enums", array] = Content:gfindEnums()
-                    if(FileData["enums", array]:count() > 1)
-                    {
-                        FileData["enums", array] = FileData["enums", array]:removeDuplicates():bubbleSort():removeFromeach("[(: ]")    
-                    }
-                    Progress = 0.55
-                    writeConsole("Enums cached")                
-                }
-                break
                 
-                case 8,
+                case 9,
                     writeConsole("Data cached")
               #      gCache(FilePath)
                 break
@@ -1264,7 +1398,39 @@ if( first() )
         }
         return Temp
     }
+
+    function string reloadOtherTextShit()
+    {
+        local Highest = 1
+        local LineNumber = ""
+        for(I = LineIndex, ceil(LineIndex + 512 / Fontsize) - 2)
+        {
+            LineNumber += I + "\n"   
+            if(I > Highest)
+            {
+                Highest = I   
+            }
+        }
+        
+        LineNumLen = Fontsize * Highest:toString():length()
+        return LineNumber
+    }
     
+    function void reloadTextAssets()
+    {
+        local LineNumber = reloadOtherTextShit()
+        
+        local Y = LineNumLen / Fontsize      
+        
+        EGP:egpBox(32, vec2(0,0), vec2(LineNumLen - Y, 512))
+        EGP:egpColor(32, vec(60,60,60))     
+           
+        EGP:egpTextLayout(33, LineNumber, vec2(Y, Y), vec2(512, 512))
+        EGP:egpFont(33, "Lucida Console")
+        EGP:egpSize(33, Fontsize)
+        EGP:egpColor(33, vec(125,125,160))     
+    }
+
     DisplaySteps = 0
     function number displayLines()
     {                
@@ -1279,6 +1445,11 @@ if( first() )
             switch(DisplaySteps)
             { 
                 case 0, 
+                    reloadOtherTextShit()
+                    
+                    EGP:egpRemove(32)
+                    EGP:egpRemove(33)
+                                         
                     SnippetCopy = SnippetCopy:text(20, FileData, "preproc") 
                     DisplaySteps++
                 break
@@ -1301,10 +1472,11 @@ if( first() )
                         newText(23, SnippetCopy, col4Key(Dir))
                         SnippetCopy = SnippetCopy:removeFromText(Removal)
                     }
-                    DisplaySteps++
+
+                    DisplaySteps++   
                 break
-                
-                case 4,      
+        
+                case 4,
                     Dir = "keywords"
                     Removal = Syntax[Dir, table]["words", array]
                     if(Removal:count() > 0)
@@ -1312,7 +1484,7 @@ if( first() )
                         newText(24, SnippetCopy, col4Key(Dir))
                         SnippetCopy = SnippetCopy:removeFromText(Removal)
                     } 
-                    DisplaySteps++
+                    DisplaySteps++                
                 break
         
                 case 5,
@@ -1323,7 +1495,10 @@ if( first() )
                         newText(25, SnippetCopy, col4Key(Dir))
                         SnippetCopy = SnippetCopy:removeFromText(Removal)
                     } 
+
                     DisplaySteps++
+
+                    SnippetCopy = SnippetCopy:text(29, FileData, "enums")
                 break
      
                 case 6, 
@@ -1341,18 +1516,16 @@ if( first() )
                     DisplaySteps++
                 break   
     
-                case 9, 
-                    SnippetCopy = SnippetCopy:text(29, FileData, "enums")
-                    newText(30, SnippetCopy, col4Key("numbers"))
+                case 9,  
+                    newText(30, SnippetCopy, col4Key("numbers"))   
+                                 
                     SnippetCopy = SnippetCopy:removeNumbers() 
                     newText(31, SnippetCopy, col4Key("nil"))
-                    DisplaySteps++
+                       
+                    reloadTextAssets()
 
-              #      for(I = 20, 31)
-              #      {
-                       # EGP:egpAlpha(I, 255) 
-              #      }
-                break                
+                    DisplaySteps++
+                break         
                 
                 default,
                     DisplaySteps++
@@ -1381,6 +1554,13 @@ if( first() )
         DisplaySteps = -1
         DisplayingProg = 0      
     }
+
+    function void reloadView()
+    {
+        EGP:egpPos(250, vec2(EGP:egpPos(250)[1], -(LineIndex * Fontsize)))                
+        CurrentSnippet = FileLines:getTextSnippet(LineIndex, ceil(LineIndex + 512 / Fontsize) - 2)
+        reloadScript()      
+    }
     
     # [ --- Data Initialization --- ] #
     FileData = table(
@@ -1393,9 +1573,6 @@ if( first() )
         "enums" = array() # done
     )
     
-    # nachdem comments & strings gefunden wurden, schauen ob entweder eines der strings in einem der comments ist oder nicht. Wenn ja, dann entferne das string aus dem array.
-    # Selbes prinzip fuer die Funktionen 
-    # Um zu pruefen ob es sich bei der Funktion nicht um einen typ handelt, schauen ob ein ( am ende ist. (gohidas auf discord)
     Evaluated = 0
     ReadyToEvaluate = 0
 
@@ -1424,7 +1601,7 @@ if(changed(EGP:entity()) & EGP:entity())
     loadFile(FilePath)   
 }
 
-if(fileLoaded())
+if(fileLoaded() & prevention())
 {
     if(EGP:entity() & ReadyToEvaluate == 0 & IsLoading)
     {
@@ -1458,13 +1635,13 @@ if(fileLoaded())
         if(useDown())
         {
             local Pos =  (Cursor - OldTextPos) + TextPos
-            Pos = vec2(round(Pos[1]), round(Pos[2]))      
+            Pos = vec2(floor(Pos[1]), floor(Pos[2]))      
                   
             local ClampedPos = vec2()
 
-            if(Pos[2] > PrevY + 12 | Pos[2] < PrevY - 12)
+            if(Pos[2] > PrevY + Fontsize | Pos[2] < PrevY - Fontsize)
             {    
-                LineIndex = max(floor((-Pos[2]) / 12) + 1, 1) 
+                LineIndex = max(floor((-Pos[2]) / Fontsize) + 1, 1)#, FleLines:count() - 250 / Fontsize)
                 ClampedPos[2] = Pos[2]  
                 PrevY = ClampedPos[2]  
             }
@@ -1475,20 +1652,20 @@ if(fileLoaded())
             
             ClampedPos[1] = Pos[1]
 
-            EGP:egpPos(250, clamp(ClampedPos, vec2(-999999999,-999999999), vec2(0,0)))  
+            EGP:egpPos(250, clamp(ClampedPos, vec2(-999999999,(-FileLines:count() * Fontsize) + 500), vec2(0,0)))  
 
             if(!EGP:egpHasObject(252))
             {
-                EGP:egpBox(252, vec2(0,Cursor[2]),vec2(512,1))
+                EGP:egpBox(252, vec2(0,Cursor[2]),vec2(512,3))
                 EGP:egpAlpha(252, 75)
             }
             else
             {
-                local IndiciatorPos = round(Cursor[2])
+                local IndiciatorPos = floor(Cursor[2])
                 
-                if(IndiciatorPos > PrevInd + 12 | IndiciatorPos < PrevInd - 12)
+                if(IndiciatorPos > PrevInd + Fontsize | IndiciatorPos < PrevInd - Fontsize)
                 {
-                    IndiciatorPos = Cursor[2] + 1
+                    IndiciatorPos = Cursor[2]
                     PrevInd = IndiciatorPos 
                 }
                 else
@@ -1501,8 +1678,8 @@ if(fileLoaded())
         }
         else
         {
-            OldTextPos = Cursor 
-            TextPos = EGP:egpPos(250)    
+            OldTextPos = Cursor
+            TextPos = clamp(EGP:egpPos(250), vec2(-999999999,(-FileLines:count() * Fontsize) + 512), vec2(0,0))    
             
             if(EGP:egpHasObject(252))
             {
@@ -1516,7 +1693,7 @@ if(fileLoaded())
         {
             if(LineIndex != PrevLine)
             {
-                CurrentSnippet = FileLines:getTextSnippet(LineIndex, LineIndex + 41)
+                CurrentSnippet = FileLines:getTextSnippet(LineIndex, ceil(LineIndex + 512 / Fontsize) - 2)
                 reloadScript()   
             }
             
@@ -1527,51 +1704,142 @@ if(fileLoaded())
         {
             OldCursor = Cursor   
         }
+
+        if(chat("goto"))
+        {
+            local Line = User:lastSaid():explode(" ")[2, string]
+            
+            if(Line:isNumber())
+            {
+                local I = clamp(Line:toNumber(), 1, FileLines:count())
+                LineIndex = I                
+                reloadView() 
+            }
+        }
+        elseif(chat("size"))
+        {
+            local Size = User:lastSaid():explode(" ")[2, string]
+            
+            if(Size:isNumber())
+            {
+                Fontsize = Size:toNumber()          
+                reloadView()
+            }               
+        }
+        elseif(oChat("wl"))
+        {
+            local Name = owner():lastSaid():sub(5, owner():lastSaid():length())
+            local Player = findPlayerByName(Name)
+            if(Player != noentity())
+            {
+                if(!onWhitelist(Player:steamID()))
+                {
+                    whitelistUser(Player:steamID()) 
+                    hint("\"" + Name + "\" has been whitelisted.", 2)         
+                }
+                else
+                {
+                    hint("\"" + Name + "\" is already whitelisted.", 2)          
+                }       
+            }
+            else
+            {
+                hint("\"" + Name + "\" is not a player.", 2)   
+            }
+        }
+        elseif(oChat("bl"))
+        {
+            local Name = owner():lastSaid():sub(5, owner():lastSaid():length())
+            local Player = findPlayerByName(Name)
+            if(Player != noentity())
+            {
+                if(onWhitelist(Player:steamID()))
+                {
+                    blacklistUser(Player:steamID())  
+                    hint("\"" + Name + "\" has been blacklisted.", 2)      
+                }
+                else
+                {
+                    hint("\"" + Name + "\" is already blacklisted.", 2)          
+                }       
+            }
+            else
+            {
+                hint("\"" + Name + "\" is not a player.", 2)   
+            }            
+        }
     }
     
     if(changed(Evaluated) & Evaluated)
     {
-        CurrentSnippet = FileLines:getTextSnippet(LineIndex, LineIndex + 41)
+        reloadView()
         hideConsole()
         hideLoading()
         CurProgress = 0
         hint("Evaluation completed", 2)        
     } 
 
-    if(clk("update"))
-    { 
-        findByClass("player")
-        User = findClosest(EGP:entity():pos())
-        timer("update", 1000)   
+    if(clk("update") & Evaluated)
+    {
+        local Distances = table()
+        local C = 1
+        foreach(I, Ply:entity = players())
+        {
+            if(onWhitelist(Ply:steamID()) | Ply == owner())
+            {
+                Distances[C, table] = table("ent" = Ply, "distance" = EGP:entity():boxCenterW():distance(Ply:pos()))
+                C++
+            }   
+        }
+
+        if(Distances:count() > 1)
+        {
+            Distances = Distances:bubbleSort()
+            User = Distances[Distances:count(), table]["ent", entity]
+        }        
+        else
+        {
+            User = Distances[1, table]["ent", entity]  
+        }
+        
+        timer("update", 1500)   
+        
+        User = owner()
     }
     else
     {
-        timer("update", 1000)   
+        timer("update", 1500)   
     }    
 
     Cursor = EGP:egpCursor(User)
 }
+elseif(fileStatus() == _FILE_404)
+{
+    hint("This file does not exist.", 2)   
+    hideLoading()
+}
 
-
-# Deprecated
-        #[
-        local GCache = loadGCache()
-        if(GCache["name", table][1, string] == FilePath)
-        {
-            foreach(K, Key:string = GCache:keys())
-            {
-                if(Key != "name")
-                {
-                    FileData[Key, array] = GCache[Key, array]       
-                }   
-            }    
-            
-            Evaluated = 1
-        }
-        else
-        {      ]#  
-
-
-
-
-
+if(oChat("open"))
+{
+    local Name = owner():lastSaid():explode(" ")[2, string]:replace(" ", "_")      
+    local NewPath = ">e2shared/" + Name + ".txt"
+    FileData:clear()
+    ReadyToEvaluate = 0
+    Evaluated = 0
+    LineIndex = 1
+    DisplayingProg = 0
+    CurProgress = 0
+    CurrentSnippet = ""
+    FileContent = ""
+    FileLines = array()
+    OldTextPos = vec2()
+    TextPos = vec2()
+    SnippetCopy = CurrentSnippet
+    DisplaySteps = -1
+    DisplayingProg = 0      
+    resetAll()
+    loadFile(NewPath)
+    initEGP()
+    showLoading()
+    hint("Reloading...", 2)
+}
