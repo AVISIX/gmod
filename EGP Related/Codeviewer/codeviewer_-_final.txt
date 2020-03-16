@@ -1,8 +1,8 @@
 @name Codeviewer - Final
 @inputs EGP:wirelink
 @persist BuildSpeed OpsLimit LineIndex SlothDone SlothStep SlothSwapped IsLoading TotalTexts LineNumLen LineCounter InsideString Yield Stepper Evaluated ReadyToEvaluate ReadyToShow StringProgress 
-@persist Continue OtherSpeed CurProgress DisplaySteps FuncsRetrieved DisplayingProg PrevY PrevLine PrevInd Fontsize
-@persist [FilePath StringBuilder FileContent CommentType CommentBuilder TextBuilder Console CurrentSnippet SnippetCopy ChatPrefix]:string
+@persist Continue OtherSpeed CurProgress DisplaySteps FuncsRetrieved DisplayingProg PrevY PrevLine PrevInd Fontsize Perf
+@persist [FilePath StringBuilder FileContent CommentType CommentBuilder TextBuilder Console CurrentSnippet SnippetCopy ChatPrefix Font]:string
 @persist [Syntax FileData]:table
 @persist [SlothCopy LineBuilder FileLines CommentCollection VariableCollection FuncCollection Whitelist]:array
 @persist [ ]:gtable
@@ -28,12 +28,14 @@ if( first() )
         
     # [ --- Config --- ] #
     ChatPrefix = "/"
-    BuildSpeed = 250
+    BuildSpeed = 1
     OtherSpeed = 1 # Better keep this at 1
-    OpsLimit = 3500 #6500
+    OpsLimit = 5000 #6500
     LineIndex = 1
-    Fontsize = 13
+    Font = "Courier New"
+    Fontsize = 14
     FilePath = ">e2shared/base64.txt" #">e2shared/codeviewer_-_final.txt" #
+    Perf = 20
 
     Syntax = table(
         "preproc" = table(
@@ -159,7 +161,7 @@ if( first() )
 
     function number prevention()
     {
-        return perf(50) & ops() < OpsLimit   
+        return perf(Perf) & ops() < OpsLimit   
     }
     
     SlothDone = 0
@@ -454,14 +456,22 @@ if( first() )
 
     function void newText(Index, Text:string, Col:vector)
     {       
-        EGP:egpTextLayout(Index, Text, vec2(6 + LineNumLen, 5 ), vec2(9999))     
-        EGP:egpSize(Index, Fontsize)
-        EGP:egpAlpha(Index, 255)
-        EGP:egpColor(Index, Col)  
-        EGP:egpFont(Index, "Lucida Console") #"Courier New")      
-     #   EGP:egpAlpha(Index, 0)
-        EGP:egpParent(Index, 251)
-     
+        if(!EGP:egpHasObject(Index))
+        {
+            EGP:egpTextLayout(Index, Text, vec2(6, 5 ), vec2(9999))     
+            EGP:egpSize(Index, Fontsize)
+            EGP:egpColor(Index, Col)   
+            EGP:egpFont(Index, Font) 
+            EGP:egpParent(Index, 251)
+        }
+        else
+        {
+            EGP:egpSetText(Index, Text)   
+            EGP:egpFont(Index, Font) 
+            EGP:egpColor(Index, Col)  
+        }   
+          
+        EGP:egpAlpha(Index, 0)
     } 
     
     function void hideText(Index)
@@ -506,7 +516,8 @@ if( first() )
         EGP:egpTextLayout(19, Console, vec2(5, 330), vec2(999, 999))   
         EGP:egpColor(19, vec(125,125,140))
         EGP:egpAlpha(19, 255)
-        EGP:egpFont(19, "Lucida Console")
+     #   EGP:egpFont(19, "Lucida Console")
+        EGP:egpFont(19, Font)
     }
         
     function void clearConsole()
@@ -516,7 +527,8 @@ if( first() )
         EGP:egpTextLayout(19, Console, vec2(5, 330), vec2(999, 999))   
         EGP:egpColor(19, vec(125,125,140))
         EGP:egpAlpha(19, 255)
-        EGP:egpFont(19, "Lucida Console")        
+     #   EGP:egpFont(19, "Lucida Console")        
+        EGP:egpFont(19, Font)
     }
     
     function void loadFile(Path:string)
@@ -986,40 +998,6 @@ if( first() )
         
         return Constructor    
     }
-    
-    RemLinesOn = 0
-    function string string:slowRemove(Input:array)
-    {
-        if(RemLinesOn == 0)
-        {
-            RemLinesBuilder = This
-            RemLinesCounter = 0
-            RemLinesOn = 1   
-        }      
-        
-        if(clk("rem") & RemLinesCounter < Input:count())
-        {
-            local Blc = Input[RemLinesCounter, string]             
-            RemLinesBuilder = RemLinesBuilder:replace(Blc, ws(Blc))
-            RemLinesCounter++
-            
-            timer("rem", OtherSpeed)   
-        }
-        else
-        {
-            if(RemLinesCounter >= Input:count())
-            {                
-                RemLinesOn = 0
-                return RemLinesBuilder      
-            }     
-            else
-            {
-                timer("rem", OtherSpeed)
-            }  
-        }        
-        
-        return ""      
-    }
 
     function void resetAll()
     {
@@ -1344,7 +1322,7 @@ if( first() )
 
         # [ --- Background --- ] #
         EGP:egpBox(18, vec2(0,0), vec2(512,512))
-        EGP:egpColor(18, vec(33,33,33))
+        EGP:egpColor(18, vec(45,45,45))
     
         
         # 62
@@ -1422,13 +1400,28 @@ if( first() )
         
         local Y = LineNumLen / Fontsize      
         
-        EGP:egpBox(32, vec2(0,0), vec2(LineNumLen - Y, 512))
-        EGP:egpColor(32, vec(60,60,60))     
-           
-        EGP:egpTextLayout(33, LineNumber, vec2(Y, Y), vec2(512, 512))
-        EGP:egpFont(33, "Lucida Console")
-        EGP:egpSize(33, Fontsize)
-        EGP:egpColor(33, vec(125,125,160))     
+        if(!EGP:egpHasObject(32))
+        {
+            EGP:egpBox(32, vec2(0,0), vec2(LineNumLen - Y, 512))
+            EGP:egpColor(32, vec(60,60,60))     
+        } 
+        else
+        {
+            EGP:egpSize(32, vec2(LineNumLen - Y, 512))   
+        }
+         
+        if(!EGP:egpHasObject(33)) 
+        {
+            EGP:egpTextLayout(33, LineNumber, vec2(0, 0), vec2(512, 512))
+            EGP:egpFont(33, "Lucida Console")
+            EGP:egpSize(33, Fontsize)
+            EGP:egpColor(33, vec(125,125,160))     
+        }
+        else
+        {
+            EGP:egpSetText(33, LineNumber)
+            EGP:egpSize(33, Fontsize)               
+        }
     }
 
     DisplaySteps = 0
@@ -1440,16 +1433,15 @@ if( first() )
             DisplaySteps = -1
         }
         
-        while(DisplaySteps < 10 & prevention())
+        while(DisplaySteps <= 10 & prevention())
         {
             switch(DisplaySteps)
             { 
-                case 0, 
-                    reloadOtherTextShit()
-                    
-                    EGP:egpRemove(32)
-                    EGP:egpRemove(33)
-                                         
+                case 0,           
+                    for(I = 31, 20, -1)
+                    {
+                        EGP:egpAlpha(I, 0)
+                    }
                     SnippetCopy = SnippetCopy:text(20, FileData, "preproc") 
                     DisplaySteps++
                 break
@@ -1458,13 +1450,8 @@ if( first() )
                     SnippetCopy = SnippetCopy:text(21, FileData, "strings") 
                     DisplaySteps++
                 break
-                
-                case 2, 
-                    SnippetCopy = SnippetCopy:text(22, FileData, "comments") 
-                    DisplaySteps++
-                break
-                
-                case 3,
+
+                case 2,
                     local Dir = "ppcommands"
                     local Removal = Syntax[Dir, table]["words", array]
                     if(Removal:count() > 0)
@@ -1474,6 +1461,11 @@ if( first() )
                     }
 
                     DisplaySteps++   
+                break
+                
+                case 3, 
+                    SnippetCopy = SnippetCopy:text(22, FileData, "comments") 
+                    DisplaySteps++
                 break
         
                 case 4,
@@ -1510,7 +1502,7 @@ if( first() )
                     SnippetCopy = SnippetCopy:text(27, FileData, "userfunctions") 
                     DisplaySteps++
                 break                                                                       
-        
+
                 case 8, 
                     SnippetCopy = SnippetCopy:text(28, FileData, "uservariables") 
                     DisplaySteps++
@@ -1521,11 +1513,14 @@ if( first() )
                                  
                     SnippetCopy = SnippetCopy:removeNumbers() 
                     newText(31, SnippetCopy, col4Key("nil"))
-                       
-                    reloadTextAssets()
-
+                    
                     DisplaySteps++
                 break         
+
+                case 10,                   
+                    reloadTextAssets()
+                    DisplaySteps++
+                break
                 
                 default,
                     DisplaySteps++
@@ -1533,8 +1528,13 @@ if( first() )
             }
         }
         
-        if(DisplaySteps > 10)
+        if(DisplaySteps >= 10)
         {
+            for(I = 31, 20, -1)
+            {
+                EGP:egpAlpha(I, 255)
+            }
+
             DisplaySteps = -1
             SnippetCopy = CurrentSnippet
             return 1       
@@ -1545,14 +1545,14 @@ if( first() )
     
     function void reloadScript()
     {
-        for(I = 20, 31)
-        {
-            EGP:egpRemove(I)   
-        }
-        
         SnippetCopy = CurrentSnippet
         DisplaySteps = -1
         DisplayingProg = 0      
+
+        for(I = 20, 31)
+        {
+            EGP:egpAlpha(I, 0)
+        }
     }
 
     function void reloadView()
@@ -1652,7 +1652,7 @@ if(fileLoaded() & prevention())
             
             ClampedPos[1] = Pos[1]
 
-            EGP:egpPos(250, clamp(ClampedPos, vec2(-999999999,(-FileLines:count() * Fontsize) + 500), vec2(0,0)))  
+            EGP:egpPos(250, clamp(ClampedPos, vec2(-999999999,(-FileLines:count() * Fontsize) + 500), vec2(LineNumLen,0)))  
 
             if(!EGP:egpHasObject(252))
             {
@@ -1679,7 +1679,7 @@ if(fileLoaded() & prevention())
         else
         {
             OldTextPos = Cursor
-            TextPos = clamp(EGP:egpPos(250), vec2(-999999999,(-FileLines:count() * Fontsize) + 512), vec2(0,0))    
+            TextPos = clamp(EGP:egpPos(250), vec2(-999999999,(-FileLines:count() * Fontsize) + 512), vec2(LineNumLen,0))    
             
             if(EGP:egpHasObject(252))
             {
@@ -1804,7 +1804,7 @@ if(fileLoaded() & prevention())
         
         timer("update", 1500)   
         
-        User = owner()
+       # User = owner()
     }
     else
     {
@@ -1823,21 +1823,21 @@ if(oChat("open"))
 {
     local Name = owner():lastSaid():explode(" ")[2, string]:replace(" ", "_")      
     local NewPath = ">e2shared/" + Name + ".txt"
+    resetAll()
     FileData:clear()
+    CurrentSnippet = ""
+    FileContent = ""
     ReadyToEvaluate = 0
     Evaluated = 0
     LineIndex = 1
-    DisplayingProg = 0
     CurProgress = 0
-    CurrentSnippet = ""
-    FileContent = ""
     FileLines = array()
     OldTextPos = vec2()
     TextPos = vec2()
     SnippetCopy = CurrentSnippet
     DisplaySteps = -1
-    DisplayingProg = 0      
-    resetAll()
+    DisplayingProg = 0
+    Stepper = 0      
     loadFile(NewPath)
     initEGP()
     showLoading()
