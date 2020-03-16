@@ -1,0 +1,1458 @@
+@name Ferdinand
+@inputs [Seat]:entity [Cam]:wirelink
+
+# Global importance
+@persist [E Driver BH]:entity [X Y LegLength LegLengthA LegLengthB StepHeight W A S D Space Shift One Two Three Four LCtrl HoverHeight Mass]:number 
+@persist [MoveSpeed ArmLength ArmLengthA ArmLengthB AX AY RunningC]:number [AimPoint AimDirection]:vector
+
+# Animations
+@persist [ Legs Anim RunL RunR WalkL WalkR]:table [BaseSpeed AnimSens StepVelocity AnimC YawApproach RunningSens RunningVelocity RunningStepHeight RunningSpeed]:number
+@persist [ RunningAcceleration ]:number 
+
+# Setup
+@persist [SeatFound]:number [SeatPos]:vector [SeatAng]:angle [SeatParent]:entity
+
+# Holo 
+@persist [Holo Clip]:table [HoloCounter ClipCounter SetupProgress]:number 
+
+# Mode
+@persist [Mode PrevMode]:string 
+
+@model models/hunter/blocks/cube05x05x05.mdl
+
+#ifdef entity:setPos(vector)
+
+if(first())
+{ 
+    # Some Mech I started some months ago. Never finished it. 
+    # If anyone manages to make something awesome out of this let me know :)
+
+    E = entity()
+    
+    SeatPos = vec(0,0,35)
+    SeatAng = ang(0,-90,0)
+    
+    HoverHeight = 160
+    
+    BaseSpeed = 0.0425
+    
+    #Walking
+    AnimSens  = 600
+    
+    StepVelocity  = 2.025  
+    StepHeight    = 5
+        
+    MoveSpeed = 60
+    ########
+    
+    #running
+    RunningSens = 850
+    
+    RunningVelocity = 1.25
+    
+    RunningStepHeight = 7
+    
+    RunningSpeed = 180
+    ########
+    
+    SeatParent = E   
+        
+    function void setMode(NewMode:string)
+    {
+        if(NewMode:replaceRE("%s" , "") != "")
+        {
+            PrevMode = Mode
+            Mode = NewMode   
+        }
+    }
+
+    function string prevMode()
+    {
+        return PrevMode:replaceRE("%s" , "") != "" ? PrevMode : Mode 
+    }
+    
+    function void runMode()
+    {
+        if(Mode:replaceRE("%s" , "") != "")
+        {
+            Mode()
+        }
+    }
+    
+    function string mode()
+    {
+        return Mode
+    }
+    
+    function number on(Event:number)
+    {
+        if(changed(Event) && Event)
+        {
+            return 1   
+        }
+        
+        return 0
+    }
+
+    function number on(Event:number, Value:number)
+    {
+        if(changed(Event == Value) && Event == Value)
+        {
+            return 1   
+        }
+        
+        return 0
+    }
+    
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################
+    
+    # --- Internal Functions --- #
+    function number cConverter(Beginning, Ending, TotalCounter)
+    {
+        return clamp(-Beginning * (1 / (Ending - Beginning)) + ((1 / (Ending - Beginning)) * TotalCounter ), 0, 1)
+    }
+    
+    function void table:checkSequenceSessionData()
+    {
+        if(!This:exists("runtime"))
+        {              
+            This["runtime", table] = table("curSeq" = 0,
+                                        "animation" = vec(),
+                                        "prevEnd" = vec(),
+                                        "firstIteration" = 0
+                                        )    
+        }
+    
+        if(!This:exists("sequences"))
+        {                       
+            This["sequences", table] = table()   
+        }
+    }    
+    
+    function number table:compareType(Index, Type:string)
+    {         
+        local UpdateType = This[Index, table]["type", string]      
+    
+        if(UpdateType != Type)
+        {
+            return 1  
+        }           
+        
+        return 0
+    }
+    # -------------------------- #    
+    
+    
+    
+    # --- Global Functions (You should use) --- #
+    function vector table:anim()
+    {
+        return This["runtime", table]["animation", vector]
+    }
+    
+    # --- Updaters --- #
+    function void table:updateLinearDestination(Index:number, NewDestination:vector)
+    {
+        local Sequences = This["sequences", table]
+        
+        if(Sequences:count() == 0)
+        {
+            return   
+        }
+     
+        if(Sequences:compareType(Index, "linear"))
+        {
+            return   
+        }
+        
+        Sequences[Index, table]["dest", vector] = NewDestination   
+    }
+    
+    function void table:updateBezierPoints(Index:number, NewMiddle:vector, NewDestination:vector)
+    {
+        local Sequences = This["sequences", table]
+        
+        if(Sequences:count() == 0)
+        {
+            return   
+        }
+        
+        if(Sequences:compareType(Index, "bezier"))
+        {
+            return   
+        }
+        
+        Sequences[Index, table]["mid",  vector] = NewMiddle   
+        Sequences[Index, table]["dest", vector] = NewDestination   
+    }
+    
+    function void table:updateCubicPoints(Index:number, NewPointA:vector, NewPointB:vector, NewDestination:vector)
+    {        
+        local Sequences = This["sequences", table]
+        
+        if(Sequences:count() == 0)
+        {
+            return   
+        }
+     
+        if(Sequences:compareType(Index, "cubic"))
+        {
+            return   
+        }
+       
+        Sequences[Index, table]["point1",  vector] = NewPointA   
+        Sequences[Index, table]["point2",  vector] = NewPointB   
+        Sequences[Index, table]["dest",    vector] = NewDestination   
+    }
+         
+            
+    # --- Initializers --- #
+    function void table:addLinearEntry(Sequence_Start:number, Sequence_End:number, Destination:vector)
+    {
+        This:checkSequenceSessionData()
+        
+        local T = This["sequences", table]
+        
+        local Pos_In_Queue = max(T:count(), 0)
+        
+        T[Pos_In_Queue, table] = table("type" = "linear",
+                                       "start" = Sequence_Start,
+                                       "end" = Sequence_End,
+                                       "dest" = Destination)          
+    }
+    
+    function void table:addBezierEntry(Sequence_Start:number, Sequence_End:number, MiddlePoint:vector, Destination:vector)
+    {
+        This:checkSequenceSessionData()
+        
+        local T = This["sequences", table]
+        
+        local Pos_In_Queue = max(T:count(), 0)
+        
+        T[Pos_In_Queue, table] = table("type" = "bezier",
+                                       "start" = Sequence_Start,
+                                       "end" = Sequence_End,
+                                       "mid" = MiddlePoint,
+                                       "dest" = Destination)          
+    }
+    
+    function void table:addCubicEntry(Sequence_Start:number, Sequence_End:number, PointA:vector, PointB:vector, Destination:vector)
+    {
+        This:checkSequenceSessionData()
+        
+        local T = This["sequences", table]
+        
+        local Pos_In_Queue = max(T:count(), 0)
+        
+        T[Pos_In_Queue, table] = table("type" = "cubic",
+                                       "start" = Sequence_Start,
+                                       "end" = Sequence_End,
+                                       "point1"  = PointA,
+                                       "point2"  = PointB,
+                                       "dest" = Destination)          
+    }
+    
+    # --- Initializer & Updater in 1 --- #
+    function void table:insertLinearEntry(Index:number, Sequence_Start:number, Sequence_End:number, Destination:vector)
+    {
+        local T = This["sequences", table]
+    
+        if(!T:exists(Index))
+        {
+            This:checkSequenceSessionData()
+      
+            T[Index, table] = table("type" = "linear",
+                                    "start" = Sequence_Start,
+                                    "end" = Sequence_End,
+                                    "dest" = Destination)   
+        }   
+        
+        This:updateLinearDestination(Index, Destination)    
+    }
+    
+    function void table:insertBezierEntry(Index:number, Sequence_Start:number, Sequence_End:number, MiddlePoint:vector, Destination:vector)
+    {
+        local T = This["sequences", table]
+    
+        if(!T:exists(Index))
+        {
+            This:checkSequenceSessionData()
+      
+            T[Index, table] = table("type" = "bezier",
+                                    "start" = Sequence_Start,
+                                    "end" = Sequence_End,
+                                    "mid" = MiddlePoint,
+                                    "dest" = Destination)     
+        }   
+        
+        This:updateBezierPoints(Index, MiddlePoint, Destination)    
+    }    
+    
+    
+    function void table:insertCubicEntry(Index:number, Sequence_Start:number, Sequence_End:number, PointA:vector, PointB:vector, Destination:vector)
+    {
+        local T = This["sequences", table]
+    
+        if(!T:exists(Index))
+        {
+            This:checkSequenceSessionData()
+      
+            T[Index, table] = table("type" = "cubic",
+                                    "start" = Sequence_Start,
+                                    "end" = Sequence_End,
+                                    "point1"  = PointA,
+                                    "point2"  = PointB,
+                                    "dest" = Destination)     
+        }   
+        
+        This:updateCubicPoints(Index, PointA, PointB, Destination)    
+    }  
+    
+    # --- Main --- #
+    function void table:runSequenceSession(Origin:vector, Execution_Counter:number)
+    {
+        # --- Initialization --- #
+        if(This:count() == 0)
+        {
+            return   
+        }
+    
+        local Counter = Execution_Counter           
+        
+        local R = This["runtime",   table] #Execution shit
+        local D = This["sequences", table] #Sequence infos
+        # ---------------------- #        
+        
+        
+        
+        # --- Start Handler --- #
+        if(R["firstIteration", number] == 0)
+        {
+            for(I = 0, D:count() - 1)
+            {
+                local CSeq = D[I, table]
+                
+                local CStart = CSeq["start", number]
+                local CEnd   = CSeq["end", number]
+       
+                if(Counter > CStart && Counter <= CEnd)
+                {
+                    R["curSeq", number] = I
+                    
+                    break
+                }                                                   
+            }     
+            
+            R["firstIteration", number] = 1
+        }
+        # --------------------- #
+     
+    
+    
+        # --- Main Sequence Animator --- #
+        local SequenceIndex = R["curSeq", number]    
+        
+        local CurStart = R["prevEnd", vector]
+        
+        local Sequence = D[SequenceIndex, table]
+        local Sequence_Type = D[SequenceIndex, table]["type", string]
+        
+        if(SequenceIndex == 0)
+        {
+            CurStart = Origin # Without this the first sequence wouldnt have a start
+        }
+    
+        local CurEnd = Sequence["dest", vector]       
+            
+        local CurSeqAnimStart = Sequence["start", number]
+        local CurSeqAnimEnd   = Sequence["end",   number]
+        
+        local CounterTranslation = cConverter(CurSeqAnimEnd, CurSeqAnimStart, Counter) #Convert parts of a 0->1 Counter to a 0->1 Counter 
+    
+        switch(Sequence_Type)
+        {
+            default,
+                R["animation", vector] = mix(CurStart, CurEnd, CounterTranslation) # Default (Linear)   
+            break  
+    
+            case "linear",
+                R["animation", vector] = mix(CurStart, CurEnd, CounterTranslation) # Linear                
+            break            
+            
+            case "bezier",
+                local Middle = Sequence["mid", vector]
+                
+                R["animation", vector] = bezier(CurEnd, Middle, CurStart, CounterTranslation) # Bezier
+            break
+            
+            case "cubic",
+                local PointA = Sequence["point1", vector]
+                local PointB = Sequence["point2", vector]
+    
+                local Mix1 = mix(CurStart, PointA, CounterTranslation)
+                local Mix2 = mix(PointA,   PointB, CounterTranslation)
+                local Mix3 = mix(PointB,   CurEnd, CounterTranslation)
+                 
+                R["animation", vector] = bezier(Mix3, Mix2, Mix1, CounterTranslation) # Cubic         
+            break 
+        }
+                
+        if(Counter >= CurSeqAnimEnd || CounterTranslation >= 1) # Both of those have the same result. Using both makes errors less usual
+        {
+            R["prevEnd", vector] = R["animation", vector]  
+        }
+        # ------------------------------ #  
+    
+    
+    
+        # --- Ending Handler --- #
+        if(SequenceIndex != D:count() - 1)
+        {
+            #Keep iterating through all the items to get the next sequence
+            for(I = 0, D:count() - 1)
+            {
+                local CSeq = D[I, table]
+                
+                local CStart = CSeq["start", number]
+                local CEnd   = CSeq["end", number]
+       
+                if(Counter > CStart && Counter <= CEnd)
+                {
+                    R["curSeq", number] = I
+                    
+                    break
+                }                                                
+            }  
+        }
+        else
+        {
+            R["curSeq", number] = 0
+            R["firstIteration", number] = 0 # Reset all the shit when reaching the end
+        }
+        # ---------------------- #
+    }
+    # ----------------------------------------- #
+
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################
+
+
+    function void holo(Index, Position:vector, Scale:vector, Angle:angle, Color:vector, Model:string, Parent, Alpha, Material:string)
+    {
+        Holo[Holo:count(), table] = table(Index, Position, Scale, Angle, Color, Model, Parent, Alpha, Material)
+    }
+
+    function void clip(Index, Position:vector, Direction:vector, Transparation)
+    {
+        Clip[Clip:count(), table] = table(Index, Position, Direction, Transparation)
+    }       
+    
+    function number buildVisuals()
+    {
+        switch(SetupProgress)
+        {
+            #Init
+            default,
+                runOnTick(1)
+                
+                SetupProgress = 1
+            break  
+            
+            #Holos
+            case 1,
+                local Amount = Holo:count()
+                
+                if(Amount <= 0)
+                {
+                    SetupProgress = 2         
+                }
+                else
+                {                
+                    while(HoloCounter < Amount)
+                    {                
+                        local Current = Holo[HoloCounter, table]
+                        
+                        local In = Current[1, number]
+                        local Po = Current[2, vector]
+                        local Sc = Current[3, vector]
+                        local An = Current[4, angle ]
+                        local Co = Current[5, vector]
+                        local Mo = Current[6, string]      
+                        local Pa = Current[7, number]
+                        local Al = Current[8, number]
+                        local Ma = Current[9, string]
+                        
+                        local Parent = holoEntity(Pa)
+                        
+                        if(Pa == 0)
+                        {
+                            Parent = entity()   
+                        }
+                        elseif(Pa < 0)
+                        {
+                            Parent = noentity()   
+                        }
+                        
+                        local Position = Parent:toWorld(Po)
+                        local Angle    = Parent:toWorld(An)
+                        
+                        holoCreate(In)
+                        holoPos(In, Position)
+                        holoAng(In, Angle)
+                        holoColor(In, Co)
+                        holoScale(In, Sc)
+                        holoModel(In, Mo)
+                        holoAlpha(In, Al)
+                        holoMaterial(In, Ma)
+                        holoParent(In, Parent)
+                        
+                        holoEntity(In):soundPlay(In, soundDuration("buttons/blip1.wav"), "buttons/blip1.wav")
+                        
+                        HoloCounter++                  
+                    }
+                    
+                    if(HoloCounter >= Amount)
+                    {
+                        SetupProgress = 2  
+                    }
+                }
+            break
+            
+            #Clips
+            case 2,
+                local Amount = Clip:count()
+                
+                if(Amount <= 0)
+                {
+                    SetupProgress = 3       
+                }
+                else
+                {               
+                    while(ClipCounter < Amount)
+                    {                                                     
+                        local Current = Clip[ClipCounter, table]
+                        
+                        local In = Current[1, number]
+                        local Po = Current[2, vector]
+                        local Di = Current[3, vector]
+                        local Tr = Current[4, number]
+                        
+                        holoClipEnabled(In, 1)
+                        holoClip(In, Po, Di, Tr)
+
+                        holoEntity(In):soundPlay(In, soundDuration("buttons/button24.wav"), "buttons/button24.wav")
+                        
+                        ClipCounter++                   
+                    }      
+                    
+                    if(ClipCounter >= Amount)
+                    {
+                        SetupProgress = 3
+                    }     
+                }     
+            break
+            
+            #Ending
+            case 3,       
+                return 1
+            break 
+        }
+        
+        return 0
+    }
+
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################
+
+    function void table:cLegs()
+    {
+        This:clear()   
+    }    
+
+    function void table:cLeg(Key:string)
+    {
+        This[Key, table]:clear()      
+    }  
+
+    function void table:addSounds(Key:string, SoundIDs:array)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(I = 1, SoundIDs:count())
+        {
+            SArray:pushString(SoundIDs[I, string])   
+        }    
+    }
+    
+    function void table:removeSounds(Key:string, SoundIDs:array)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(A = 1, SArray:count())
+        {
+            for(B = 1, SoundIDs:count())
+            {
+                if(SArray[A, string] == SoundIDs[B, string])
+                {
+                    SArray:removeString(A)
+                }
+            }
+        }    
+    }
+
+    function void table:setSlave(Key:string, Slave:entity)
+    {
+        This[Key, table]["SoundSlave", entity] = Slave       
+    }
+
+    function void table:removeSlave(Key:string)
+    {
+        This[Key, table]:remove("SoundSlave")     
+    }
+
+    function void table:addSound(Key:string, SoundID:string)
+    {
+        This[Key, table]["Sounds", array]:pushString(SoundID)     
+    }
+
+    function void table:removeSound(Key:string, SoundID:string)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(I = 1, SArray:count())
+        {
+            if(SArray[I, string] == SoundID)
+            {
+                This[Key, table]["Sounds", array]:removeString(I) 
+            }  
+        }
+    }
+
+    function vector table:a(Key:string)
+    {
+        return This[Key, table]["Animation", vector]   
+    }
+ 
+    function void table:overrideLeg(Key:string, NewVector:vector)
+    {
+        This[Key, table]["Animation",   vector] = NewVector      
+        This[Key, table]["Origin",      vector] = NewVector    
+        This[Key, table]["Destination", vector] = NewVector   
+        This[Key, table]["Ranger",      ranger] = rangerOffset(0, NewVector, vec(0,0,0))
+    }
+ 
+    function void table:animateLeg(Counter:number)
+    {
+        local LegCounter = cConverter(This["GStart", number], This["GEnd", number], Counter) 
+        
+        if(LegCounter < 1)
+        {        
+            local SlaveVelL = This["Slave", entity]:velL()
+            
+            local X         = clamp(SlaveVelL:x() / This["Vel", number], -This["MaxSDist", number] , This["MaxSDist", number] )
+            local Y         = clamp(SlaveVelL:y() / This["Vel", number], -This["MaxSDist", number] , This["MaxSDist", number] )
+            
+            This["Ranger", ranger] = rangerOffset(1000, This["Slave", entity]:toWorld(This["RangerPos", vector] + vec(X,Y,0)), This["RangerDir", vector])  
+            
+            if(This["Ranger", ranger]:position():distance(This["Animation", vector]) > 1)
+            {
+                This["Destination", vector] = This["Ranger", ranger]:position()
+                
+                local Middle = mix(This["Destination", vector], This["Origin", vector], 0.5) + This["Slave", entity]:up() * (This["Origin", vector] - This["Destination", vector]):length() / This["SHeight", number] 
+                        
+                This["Animation", vector] = bezier(This["Origin", vector], Middle, This["Destination", vector], LegCounter)
+            }                                             
+        } 
+        else
+        {   
+            if(This["Sounds", array]:count() > 0)
+            {
+                if((This["Animation", vector] - This["Destination", vector]):length() > 1)
+                {
+                    local Sound =  This["Sounds", array][randint(1, This["Sounds", array]:count()), string]
+                    
+                    if(This["SoundSlave", entity]:isValid() == 1) 
+                    {
+                        This["SoundSlave", entity]:soundPlay(Sound, soundDuration(Sound), Sound)                            
+                    }
+                    else
+                    {
+                        This["Slave", entity]:soundPlay(Sound, soundDuration(Sound), Sound)    
+                    }  
+                }                    
+            }
+
+            This["Animation", vector] = This["Destination", vector]
+            This["Origin",    vector] = This["Animation", vector]               
+        }
+    }
+
+    function void table:createLeg(Name:string, GaitStart:number, GaitEnd:number, Slave:entity, RangerPosition:vector, RangerDirection:vector, Velocity:number, StepHeight:number, MaxStepDist:number)
+    {
+        This[Name, table]
+        = table(
+            "Name"      = Name,
+            "GStart"    = GaitStart,
+            "GEnd"      = GaitEnd,
+            "Slave"     = Slave,
+            "RangerPos" = RangerPosition,
+            "RangerDir" = RangerDirection,
+            "Vel"       = Velocity,
+            "SHeight"   = StepHeight,
+            "MaxSDist"  = MaxStepDist,
+            "Sounds"    = array()
+        )       
+        
+        This:overrideLeg(Name, rangerOffset(9999, Slave:toWorld(RangerPosition), RangerDirection):position())
+    }  
+
+    function void table:initAnimation(LegTable:table, BaseProp:entity, BaseSpeed:number, Sensitivity:number)
+    {
+        This["BaseProp",   entity] = BaseProp                   
+        This["BaseSpeed",  number] = BaseSpeed   
+        This["Sensitvity", number] = Sensitivity   
+        This["LegTable",    table] = LegTable
+    }
+    
+    function number table:getAnimVel()
+    {
+        return (((This["BaseProp", entity]:vel():length() - This["BaseProp", entity]:velL():z()) / 4 + This["BaseProp", entity]:angVelVector():length() / 2)) / This["Sensitvity", number]                                   
+    }
+    
+    function number table:countAnimation()
+    {
+        local LegTable = This["LegTable", table]    
+
+        This["Counter", number] = This["Counter", number] + clamp(This:getAnimVel() / LegTable:count(), This["BaseSpeed", number], 1)    
+        
+        return This["Counter", number]        
+    }
+    
+    function void table:resetCounter()
+    {
+        if(This["Counter", number] >= 1)
+        {
+            This["Counter", number] = 0   
+        }             
+    }
+    
+    function void table:runAnimation()
+    {      
+        local LegTable = This["LegTable", table]    
+   
+        This:countAnimation()
+
+        foreach(K, Foot:table = LegTable)
+        {
+            Foot:animateLeg(This["Counter", number])    
+        }      
+
+        This:resetCounter()
+    }
+    
+    function number table:ac()
+    {
+        return This["Counter", number]   
+    }
+    
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################               
+
+    function number cosine(A:number, B:number, C:number)
+    {
+        return acos( (A ^ 2 + B ^ 2 - C ^ 2) / (2 * A * B) )    
+    }
+
+    function entity:ik(H1:number, H2:number, H3:number, EndPos:vector, Y:number, LengthA:number, LengthB:number)
+    {
+        if((holoEntity(H3):pos() - EndPos):length() >= 1)
+        {
+            local Axis   = This:toLocalAxis(EndPos - holoEntity(H1):pos())
+            local AxisA  = Axis:toAngle()
+            
+            local MinL   = min( Axis:length(), LengthA + LengthB)
+            
+            local PitchC = cosine(MinL ,LengthA, LengthB)
+            
+            local HipRot = quat(AxisA:setRoll(AxisA:yaw() + Y)) * qRotation(vec(0,1,0), PitchC + 90)
+     
+            holoAng( H1, This:toWorld(HipRot:toAngle()))
+    
+            local PitchK = cosine(LengthA, LengthB, MinL) 
+            holoAng( H2, holoEntity(H1):toWorld(ang(PitchK + 180,0, 0)))   
+        }   
+    }
+
+    function entity:iks(H1:number, H2:number, H3:number, EndPos:vector, Y:number, LengthA:number, LengthB:number, Strength:number)
+    {
+        if((holoEntity(H3):pos() - EndPos):length() >= 1)
+        {
+            local Axis   = This:toLocalAxis(EndPos - holoEntity(H1):pos())
+            local AxisA  = Axis:toAngle()
+            
+            local MinL   = min( Axis:length(), LengthA + LengthB)
+            
+            local PitchC = cosine(MinL ,LengthA, LengthB)
+            
+            local HipRot = quat(AxisA:setRoll(AxisA:yaw() + Y)) * qRotation(vec(0,1,0), PitchC + 90)
+     
+            holoAng( H1, slerp(quat(holoEntity(H1)), quat(This:toWorld(HipRot:toAngle())), Strength):toAngle())
+    
+            local PitchK = cosine(LengthA, LengthB, MinL) 
+            holoAng( H2, slerp(quat(holoEntity(H2)), quat(holoEntity(H1):toWorld(ang(PitchK + 180,0, 0))), Strength):toAngle())   
+        }   
+    }
+
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################               
+    
+    holo(1000, vec(), vec(1), ang(0,0,0), vec(255), "cube", 0, 255, "")
+
+    #Leg skeleon    
+    local RL = 35
+    
+    local LA = 90
+    local LB = 80
+
+    holo(1, vec(0,RL,0), vec(1), ang(0), vec(255), "cube", 1000, 255, "")
+    holo(2, vec(0,-RL,0), vec(1), ang(0), vec(255), "cube", 1000, 255, "")
+
+    holo(3, vec(0,0,LA), vec(1), ang(0), vec(255), "cube", 1, 255, "")
+    holo(4, vec(0,0,LA), vec(1), ang(0), vec(255), "cube", 2, 255, "")
+
+    holo(5, vec(0,0,LB), vec(1), ang(0), vec(255), "cube", 3, 255, "")
+    holo(6, vec(0,0,LB), vec(1), ang(0), vec(255), "cube", 4, 255, "")
+
+    # bones (remove later )    
+  #[    holo(13, vec(0,0,LA / 2), vec(0.5,0.5,7), ang(0), vec(255), "cube", 1, 255, "")
+        holo(14, vec(0,0,LA / 2), vec(0.5,0.5,7), ang(0), vec(255), "cube", 2, 255, "")
+    
+        holo(15, vec(0,0,LB / 2), vec(0.5,0.5,7), ang(0), vec(255), "cube", 3, 255, "")
+        holo(16, vec(0,0,LB / 2), vec(0.5,0.5,7), ang(0), vec(255), "cube", 4, 255, "")
+  ]#      
+
+    #Torso Rotator
+    holo(2000, vec(0,0,20), vec(1), ang(0), vec(255,0,0), "cube", 1000, 255, "")
+
+    #Arm Skeleton
+    RL = 55
+    
+    LA = 85
+    LB = 75
+    
+    holo(3000, vec(0,0,80), vec(1), ang(0), vec(255,0,0), "cube", 2000, 255, "")
+    
+    holo(7, vec(0,RL,0), vec(1), ang(0), vec(255), "cube", 3000, 255, "")
+    holo(8, vec(0,-RL,0), vec(1), ang(0), vec(255), "cube", 3000, 255, "")
+
+    holo(9, vec(0,0,LA), vec(1), ang(0), vec(255), "cube", 7, 255, "")
+    holo(10, vec(0,0,LA), vec(1), ang(0), vec(255), "cube", 8, 255, "")
+
+    holo(11, vec(0,0,LB), vec(1), ang(0), vec(255), "cube", 9, 255, "")
+    holo(12, vec(0,0,LB), vec(1), ang(0), vec(255), "cube", 10, 255, "")
+    
+    # bones (remove later )    
+  #[    holo(17, vec(0,0,LA / 2), vec(0.5,0.5,6), ang(0), vec(255), "cube", 7, 255, "")
+        holo(18, vec(0,0,LA / 2), vec(0.5,0.5,6), ang(0), vec(255), "cube", 8, 255, "")
+    
+        holo(19, vec(0,0,LB / 2), vec(0.5,0.5,6), ang(0), vec(255), "cube", 9, 255, "")
+        holo(20, vec(0,0,LB / 2), vec(0.5,0.5,6), ang(0), vec(255), "cube", 10, 255, "")
+  ]# 
+
+    #Provisoric Model
+    #legs
+    holo(13, vec(0,0,LA / 2), vec(3,2,8), ang(0), vec(255), "cube", 1, 255, "")
+    holo(14, vec(0,0,LA / 2), vec(3,2,8), ang(0), vec(255), "cube", 2, 255, "")
+    holo(15, vec(0,0,LB / 2), vec(2.2,1.825,7), ang(0), vec(255), "cube", 3, 255, "")
+    holo(16, vec(0,0,LB / 2), vec(2.2,1.825,7), ang(0), vec(255), "cube", 4, 255, "")
+    holo(17, vec(5,0,-2), vec(3.25,2.25,1), ang(0), vec(255), "cube", 5, 255, "")
+    holo(18, vec(5,0,-2), vec(3.25,2.25,1), ang(0), vec(255), "cube", 6, 255, "")
+    
+    #[
+    # Legs Model
+    
+    local MatA = "sprops/textures/sprops_rubber2"
+    local ColA = vec(255)
+    local ColB = vec(125)
+    
+    #Top
+    holo(13, vec(15,0,20), vec(2,1.65,5), ang(10,0,0), ColA, "cube", 1, 255, MatA)
+    holo(14, vec(15,0,20), vec(2,1.65,5), ang(10,0,0), ColA, "cube", 2, 255, MatA)
+    holo(15, vec(4.5,0,-2.5), vec(2.5,2,2), ang(-10,0,0), ColA, "cube", 1, 255, MatA)
+    holo(16, vec(4.5,0,-2.5), vec(2.5,2,2), ang(-10,0,0), ColA, "cube", 2, 255, MatA)
+    holo(17, vec(-0,0,30), vec(1,1.5,4), ang(10,0,0), ColA, "cube", 1, 255, MatA)
+    holo(18, vec(-0,0,30), vec(1,1.5,4), ang(10,0,0), ColA, "cube", 2, 255, MatA)
+    holo(19, vec(-4,6,-4), vec(1.7,0.2,2.5), ang(-20,0,0), ColB, "cube", 1, 255, MatA)
+    holo(20, vec(-4,6,-4), vec(1.7,0.2,2.5), ang(-20,0,0), ColB, "cube", 2, 255, MatA)
+    holo(21, vec(-4,-6,-4), vec(1.7,0.2,2.5), ang(-20,0,0), ColB, "cube", 1, 255, MatA)
+    holo(22, vec(-4,-6,-4), vec(1.7,0.2,2.5), ang(-20,0,0), ColB, "cube", 2, 255, MatA)
+    holo(23, vec(-4,0,-4), vec(1.7,0.2,2.5), ang(-20,0,0), ColB, "cube", 1, 255, MatA)
+    holo(24, vec(-4,0,-4), vec(1.7,0.2,2.5), ang(-20,0,0), ColB, "cube", 2, 255, MatA)
+    holo(25, vec(16,0,20), vec(2,0.45,5), ang(10,0,0), ColB, "cube", 1, 255, MatA)
+    holo(26, vec(16,0,20), vec(2,0.45,5), ang(10,0,0), ColB, "cube", 2, 255, MatA)
+    holo(27, vec(0,0,45), vec(1.5,1.2,6.8), ang(0,0,0), ColB, "cube", 1, 255, MatA)
+    holo(28, vec(0,0,45), vec(1.5,1.2,6.8), ang(0,0,0), ColB, "cube", 2, 255, MatA)
+    holo(29, vec(10,0,66.5), vec(1.5,1.45,4.5), ang(-30,0,0), ColA, "cube", 1, 255, MatA)
+    holo(30, vec(10,0,66.5), vec(1.5,1.45,4.5), ang(-30,0,0), ColA, "cube", 2, 255, MatA)
+             
+    #Bottom
+    holo(31, vec(-5,0,40), vec(1.5,0.825,7), ang(0,0,0), ColB, "cube", 3, 255, MatA)
+    holo(32, vec(-5,0,40), vec(1.5,0.825,7), ang(0,0,0), ColB, "cube", 4, 255, MatA)
+    ]#   
+    
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################        
+
+    function void walkingArms(Counter, Strength, Increase)
+    {
+        local BS = holoEntity(3000)
+        
+        local BHeight = (15 / 2) * max(2 * Increase, 1)
+        local FLength = 30 * Increase
+        
+        local DY = AY + 25   
+        
+        local ROrigin = BS:toWorld(vec(AX - Strength / 2-FLength,DY, -ArmLength + BHeight))
+        WalkR:insertBezierEntry(0, 0, 0.5, BS:toWorld(vec(AX + Strength+FLength,DY, -ArmLength + BHeight + Strength / 3)),  BS:toWorld(vec(AX + Strength+FLength,DY, -ArmLength + BHeight + Strength)))
+        WalkR:insertBezierEntry(1, 0.5, 1, BS:toWorld(vec(AX + Strength+FLength,DY, -ArmLength + BHeight + Strength / 3)),  ROrigin)
+        WalkR:runSequenceSession(ROrigin, Counter)      
+        BS:iks(7, 9, 11, WalkR:anim(), 0, ArmLengthA, ArmLengthB,0.4) 
+       
+        local LOrigin = BS:toWorld(vec(AX + Strength+FLength,-DY, -ArmLength + BHeight + Strength)) 
+        WalkL:insertBezierEntry(0, 0, 0.5, BS:toWorld(vec(AX + Strength+FLength,-DY, -ArmLength + BHeight + Strength / 3)),  BS:toWorld(vec(AX - Strength / 2-FLength,-DY, -ArmLength + BHeight)))
+        WalkL:insertBezierEntry(1, 0.5, 1, BS:toWorld(vec(AX + Strength+FLength,-DY, -ArmLength + BHeight + Strength / 3)),  LOrigin)
+        WalkL:runSequenceSession(LOrigin, Counter)      
+        BS:iks(8, 10, 12, WalkL:anim(), 0, ArmLengthA, ArmLengthB,0.4) 
+        
+        local Direction = (E:pos() - AimPoint):toAngle()
+        local YawRotation = clamp(BH:toWorld(ang(0,BH:toLocal(Direction):yaw() - BH:angles():yaw() + 180,0)):yaw(),-60,60)
+    
+        if(S & !(A|D))
+        {
+            YawRotation = 0       
+        }
+        
+        local TorsoRotation = BH:toWorld(ang(0,YawRotation,0))
+    
+        holoAng(2000, slerp(quat(holoEntity(2000):angles()), quat(TorsoRotation), 0.15):toAngle())        
+    }
+    
+    function void runningArms(Counter, Strength, Increase)
+    {
+        local BS = holoEntity(3000)
+        
+        local BHeight = 0 #(20 / 2) * max(2 * Increase, 1)
+        local FLength = 0 #30 * Increase
+        
+        local DY = AY + 25   
+        
+        local Dis = 1.6
+        
+        local ROrigin = BS:toWorld(vec(AX - Strength*Dis-FLength,DY, -ArmLength + BHeight))        
+        RunR:insertBezierEntry(0, 0, 0.5, BS:toWorld(vec(AX + Strength/4+FLength,DY, -ArmLength + BHeight + Strength / 2)), BS:toWorld(vec(AX + Strength/Dis+FLength,DY, -ArmLength + BHeight + Strength / 1.25)))               
+        RunR:insertBezierEntry(1, 0.5, 1, BS:toWorld(vec(AX + Strength+FLength,DY, -ArmLength + BHeight + Strength / 1.25)),  ROrigin)
+        RunR:runSequenceSession(ROrigin, Counter)      
+        BS:iks(7, 9, 11, RunR:anim(), 0, ArmLengthA, ArmLengthB,0.4) 
+               
+        DY = -DY 
+            
+        local LOrigin = BS:toWorld(vec(AX + Strength/Dis+FLength,DY, -ArmLength + BHeight + Strength / 1.25))
+        RunL:insertBezierEntry(0, 0, 0.5, BS:toWorld(vec(AX + Strength/4+FLength,DY, -ArmLength + BHeight + Strength / 2)), BS:toWorld(vec(AX - Strength*Dis-FLength,DY, -ArmLength + BHeight)))              
+        RunL:insertBezierEntry(1, 0.5, 1, BS:toWorld(vec(AX + Strength+FLength,DY, -ArmLength + BHeight + Strength / 1.25)),  LOrigin)
+        RunL:runSequenceSession(LOrigin, Counter)      
+        BS:iks(8, 10, 12, RunL:anim(), 0, ArmLengthA, ArmLengthB,0.4) 
+               
+        
+        local Direction = (E:pos() - AimPoint):toAngle()
+        local YawRotation = clamp(BH:toWorld(ang(0,BH:toLocal(Direction):yaw() - BH:angles():yaw() + 180,0)):yaw(),-60,60)
+    
+        if(S & !(A|D))
+        {
+            YawRotation = 0       
+        }
+        
+        local TorsoRotation = BH:toWorld(ang(0,YawRotation,0))
+    
+        holoAng(2000, slerp(quat(holoEntity(2000):angles()), quat(TorsoRotation), 0.15):toAngle())        
+    } 
+
+    function void feet()
+    {
+        if(!(W|A|S|D))
+        {
+            holoAng(17, BH:toWorld(ang(0,0,0)))  
+            holoAng(18, BH:toWorld(ang(0,0,0)))    
+        }
+        else
+        {
+            local A1 = (E:toLocal(E:toWorld(vec())):normalized():setZ(0) - E:toLocal(Anim:a("L")):normalized():setZ(0)):length() #min(cos(cConverter(Legs["L", table]["GStart", number],Legs["L", table]["GEnd", number], Anim["Counter", number]) * 360), 0)
+            local A2 = (E:toLocal(E:toWorld(vec())):normalized():setZ(0) - E:toLocal(Anim:a("R")):normalized():setZ(0)):length() #min(cos(cConverter(Legs["R", table]["GStart", number],Legs["R", table]["GEnd", number], Anim["Counter", number]) * 360), 0)
+            holoAng(17, BH:toWorld(ang(A1 * 20,0,0)))  
+            holoAng(18, BH:toWorld(ang(A2 * 20,0,0)))                
+        }
+    }
+
+    function number walkDirectionAccordingToKeysPressed()
+    {
+        local Rot = 180 # Default, forward
+        
+        if(S)
+        {
+            Rot -= 180  # Backwards             
+        }
+        
+        if(D)
+        {
+            Rot -= 90 #Right
+            
+            if(W|S)
+            {
+                Rot += 135 * S #Bottom Right
+                Rot += 45  * W #Top Right
+            }
+        }        
+        elseif(A)
+        {
+            Rot += 90 #Left
+            
+            if(W|S)
+            {
+                Rot -= 135 * S #Bottom Left
+                Rot -= 45  * W #Top Left
+            }
+        }
+           
+        local Direction = -E:angles():yaw()  
+        
+        if(W|A|S|D)
+        {
+            Direction += AimDirection:toAngle():yaw() + Rot
+        }
+        else
+        {
+            Direction = E:angles():yaw()  
+        }
+        
+        return Direction   
+    }
+
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################        
+        
+    function void initMech()
+    {
+        BH = holoEntity(1000)
+        
+        Mass = E:mass()
+             
+        X = BH:toLocal(holoEntity(1):pos()):x()
+        Y = BH:toLocal(holoEntity(2):pos()):y()           
+                          
+        LegLengthA = abs(holoEntity(1):toLocal(holoEntity(3):pos()):z())
+        LegLengthB = abs(holoEntity(3):toLocal(holoEntity(5):pos()):z())     
+        LegLength = LegLengthA + LegLengthB
+
+        AX = BH:toLocal(holoEntity(7):pos()):x()
+        AY = BH:toLocal(holoEntity(7):pos()):y()
+
+        ArmLengthA = abs(holoEntity(7):toLocal(holoEntity(9):pos()):z())
+        ArmLengthB = abs(holoEntity(9):toLocal(holoEntity(11):pos()):z())        
+        ArmLength = ArmLengthA + ArmLengthB
+ 
+        setMode("setupWalking")
+    }
+    
+    function void setupWalking()
+    {
+        Anim:cLegs()
+        
+        Anim:initAnimation(Legs, E, BaseSpeed, AnimSens)
+        
+        Legs:createLeg("L", 0.2, 0.5, E, vec(X,Y,0),  vec(0,0,-1), StepVelocity, StepHeight, LegLength)
+        Legs:createLeg("R", 0.7, 1,   E, vec(X,-Y,0), vec(0,0,-1), StepVelocity, StepHeight, LegLength)
+        
+        local SlaveL = holoEntity(5)
+        local SlaveR = holoEntity(6)
+         
+        Legs:setSlave("L", SlaveL)
+        Legs:setSlave("R", SlaveR)        
+        
+        Legs:addSounds("L", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav", "npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+        Legs:addSounds("R", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav", "npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))  
+        
+        setMode("walking")           
+    }
+    
+    function void walking()
+    {
+        local AntiStuckRanger = rangerOffsetHull(100, E:toWorld(vec()), E:forward(), vec(-E:radius()/2), vec(E:radius()/2))
+
+        if(Shift && (W|A|S|D) && !AntiStuckRanger:hit())
+        {
+            setMode("setupRunning")   
+        }
+
+        local Ranger = rangerOffset(LegLength * 1.25, E:toWorld(vec()), vec(0,0,-1))
+        
+        if(!Ranger:hit())
+        {
+            setMode("falling")
+        }
+        
+        BH:ik(1, 3, 5, Legs:a("R"), 180, LegLengthA, LegLengthB)
+        BH:ik(2, 4, 6, Legs:a("L"), 180, LegLengthA, LegLengthB)
+        
+        Anim:runAnimation()            
+                  
+        feet()        
+                                                      
+        local Direction = walkDirectionAccordingToKeysPressed()                            
+        E:applyAngForce((E:toLocal(ang(0,Direction,0)) * ang(5,0.75,5) - E:angVel() * ang(1,0.5,1)) * Mass)
+
+        local YawDiff = 1 - abs(angnorm(E:angles():yaw() - Direction)) / 180 #Lowers the speed during rapid rotations
+        local ForceM = E:forward() * ((MoveSpeed * YawDiff) * (W|A|S|D)) * !AntiStuckRanger:hit()
+        
+        local ZDiff = abs((holoEntity(5):pos() - holoEntity(6):pos()):dot(E:forward())) / 6
+        local ForceH = Ranger:position() + vec(0,0,HoverHeight - ZDiff)
+        
+        local Forces = (ForceM + ForceH) - E:pos()
+        E:applyForce(((Forces * vec(1,1,15)) - (E:vel() * vec(0.25,0.25,1))) * Mass)
+
+      
+        holoAng(1000, slerp(quat(BH:angles()), quat(E:toWorld(ang(10 * (W|S|A|D),0,0))), 0.1):toAngle())       
+        
+        local VelCF = (E:vel():length()) / AnimSens
+        walkingArms(Anim:ac(), VelCF * 160, VelCF)
+    }
+    
+    function void setupRunning()
+    {
+        Anim:cLegs()
+        
+        Anim:initAnimation(Legs, E, BaseSpeed, RunningSens)
+ 
+        RunningAcceleration = 0.5 
+         
+        Legs:createLeg("L", 0.1, 0.5, E, vec(X,Y,0),  BH:up() * -1, RunningVelocity, RunningStepHeight, LegLength)
+        Legs:createLeg("R", 0.6, 1,   E, vec(X,-Y,0), BH:up() * -1, RunningVelocity, RunningStepHeight, LegLength)
+        
+        local SlaveL = holoEntity(5)
+        local SlaveR = holoEntity(6)
+         
+    #    Legs:setSlave("L", SlaveL)
+    #    Legs:setSlave("R", SlaveR)        
+        
+    #    Legs:addSounds("L", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav", "npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+    #    Legs:addSounds("R", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav", "npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))  
+             
+        setMode("running")               
+    }
+    
+    function void running()
+    {
+        local AccelSpeed = 0.05
+        
+        local AntiStuckRanger = rangerOffsetHull(100, E:toWorld(vec()), E:forward(), vec(-E:radius()/2), vec(E:radius()/2))
+            
+        if(!Shift || AntiStuckRanger:hit())
+        {
+            RunningAcceleration = max(RunningAcceleration - AccelSpeed, 0.5)
+            
+            holoAng(1000, slerp(quat(BH:angles()),quat(E:angles()), 0.3):toAngle())
+            
+            if(AntiStuckRanger:hit())
+            {
+                RunningAcceleration = 0.5       
+            }
+            
+            if(RunningAcceleration <= 0.5)
+            {
+                setMode("walking") # Didnt use setupWalk here cause transition between running & walking would be dogshit
+
+                local LFinal = Legs:a("L")
+                local RFinal = Legs:a("R") 
+                
+                Anim:cLegs()
+                
+                Anim:initAnimation(Legs, E, BaseSpeed, AnimSens)
+                
+                Legs:createLeg("L", 0.2, 0.5, E, vec(X,Y,0),  vec(0,0,-1), StepVelocity, StepHeight, LegLength)
+                Legs:createLeg("R", 0.7, 1,   E, vec(X,-Y,0), vec(0,0,-1), StepVelocity, StepHeight, LegLength)
+                
+                local SlaveL = holoEntity(5)
+                local SlaveR = holoEntity(6)
+                
+                Legs:setSlave("L", SlaveL)
+                Legs:setSlave("R", SlaveR)        
+                
+                Legs:addSounds("L", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav", "npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))
+                Legs:addSounds("R", array("npc/dog/dog_footstep1.wav", "npc/dog/dog_footstep2.wav", "npc/dog/dog_footstep3.wav", "npc/dog/dog_footstep4.wav"))              
+                
+                Legs:overrideLeg("L", LFinal)
+                Legs:overrideLeg("R", RFinal)            
+                
+                Anim:runAnimation()
+            }
+        }
+        
+        local Ranger = rangerOffset(LegLength * 1.25, E:toWorld(vec()), vec(0,0,-1))
+        
+        if(!Ranger:hit())
+        {
+            setMode("falling")
+        }
+        
+        Anim:runAnimation()                    
+
+        BH:ik(1, 3, 5, Legs:a("R"), 180, LegLengthA, LegLengthB)
+        BH:ik(2, 4, 6, Legs:a("L"), 180, LegLengthA, LegLengthB)
+        
+        local SRanL = rangerOffset(0.1, Legs:a("L"), vec(0,0,-1)):hit()
+        local SRanR = rangerOffset(0.1, Legs:a("R"), vec(0,0,-1)):hit()
+        
+        if(changed(SRanL) && SRanL)
+        {
+            holoEntity(5):soundPlay(randint(1,255), 0, "npc/dog/dog_footstep" + randint(1,4) + ".wav") # Couldnt use regular sound functions from animation. Unknown bug caused sound to not be played
+        }
+
+        if(changed(SRanR) && SRanR)
+        {
+            holoEntity(6):soundPlay(randint(1,255), 0, "npc/dog/dog_footstep" + randint(1,4) + ".wav")
+        }
+        
+        local Direction = walkDirectionAccordingToKeysPressed()
+        local YawDirection = clamp(E:angVelVector():z() / 180,-1,1) # Gets the Direction the Mech is rotating with a number between -1 and +1
+        E:applyAngForce((E:toLocal(ang(0,Direction,0)) * ang(5,0.4,5) - E:angVel() * ang(1,0.5,1)) * Mass)
+
+        if(RunningAcceleration < 1 && Shift)
+        {
+            RunningAcceleration = min(RunningAcceleration + AccelSpeed, 1)    
+        }
+        
+        local YawDiff = 1 - abs(angnorm(E:angles():yaw() - Direction)) / 180 #Lowers the speed during rapid rotations        
+        local ForceM = E:forward() * max((RunningSpeed * YawDiff) * RunningAcceleration, 0)
+    
+        local PowerCrouchOnDirectionChange = abs((HoverHeight * 0.35) * abs(YawDirection))
+        local ZDiff = abs((holoEntity(5):pos() - holoEntity(6):pos()):dot(E:forward())) / 6
+        local ForceH = Ranger:position() + vec(0,0,HoverHeight - (20 * RunningAcceleration) - ZDiff - PowerCrouchOnDirectionChange)
+        
+        local Forces = (ForceM + ForceH) - E:pos()
+        E:applyForce(((Forces * vec(1,1,10)) - (E:vel() * vec(0.25,0.25,1))) * Mass)
+
+        holoAng(1000, slerp(quat(BH:angles()), quat(E:toWorld(ang(10 * (W|S|A|D),0,0))), 0.1):toAngle())       
+        
+        if(Shift)
+        {
+            holoAng(1000, slerp(quat(BH:angles()), quat(E:toWorld(ang(0,0,-YawDirection * 45))), 0.33):toAngle())
+        }   
+        
+        local VelCF = (E:vel():length()) / AnimSens
+        #genericArms(Anim:ac(), VelCF * 130, 1, 1) 
+        runningArms(Anim:ac(), VelCF * 130, VelCF)
+    }
+    
+    function void falling()
+    {
+        local Ranger = rangerOffset(LegLength, E:toWorld(vec()), vec(0,0,-1))
+
+        if(Ranger:hit())
+        {
+            E:propGravity(0)
+            
+            local SelectMode = "setupWalking"
+            
+            if(PrevMode:replaceRE("%s", "") != "")
+            {
+                if(!PrevMode:find("setup")
+                 && !PrevMode:find("run") 
+                 && !PrevMode:find("execute")
+                 && !PrevMode:find("init")
+                 && PrevMode != "falling")
+                {
+                    SelectMode = PrevMode
+                }  
+            }
+            
+            setMode(SelectMode)
+        }
+        else
+        {
+            E:propGravity(1)   
+        }
+        
+
+    }
+    
+##############################################################################################################    
+##############################################################################################################    
+##############################################################################################################        
+  
+    function void backgroundWorker()
+    {        
+        Driver = Seat:driver()
+                
+        if(Driver:isValid())
+        {
+            W = A = S = D = Space = Shift = One = Two = Three = LCtrl = 0 
+            
+            W     = Driver:keyPressed("W")
+            A     = Driver:keyPressed("A")
+            S     = Driver:keyPressed("S")
+            D     = Driver:keyPressed("D")
+            Space = Driver:keyPressed("Space")
+            Shift = Driver:keySprint()
+            One   = Driver:keyPressed("1")
+            Two   = Driver:keyPressed("2")
+            Three = Driver:keyPressed("3")
+            LCtrl = Driver:keyPressed("LCONTROL")   
+            
+            Cam["Activated", number] = 1            
+            
+            AimPoint = rangerOffset(9999, Driver:shootPos(), Seat:toLocalAxis(Driver:aimPos() - Driver:shootPos())):position()
+        }     
+        else
+        {
+            Cam["Activated", number] = W = A = S = D = Space = Shift = One = Two = Three = LCtrl = 0    
+            
+            AimPoint = E:toWorld(vec(1000,0,0))
+        }   
+        
+        AimDirection = E:toWorldAxis((E:pos() - AimPoint):normalized())
+    } 
+}
+
+    interval(60)     
+            
+if(1)
+{
+    local Setup = buildVisuals()
+    
+    if(Setup == 0)
+    {
+        runOnTick(1)    
+    }
+    else
+    {      
+        if(SeatFound == 1)
+        {
+            runOnTick(0)
+            
+            if(on(Cam:entity():isValid(), 1))
+            {
+                Cam["Parent", entity] = E      
+            }
+
+            if(mode():replaceRE("%s", "") == "")
+            {
+                setMode("initMech")   
+            }
+            else
+            {
+                # After everything has been set up, this part will run the mech
+                runMode()               
+                backgroundWorker()                            
+            }
+        }
+        else
+        {
+            if(changed(Seat:isValid()) && Seat:isValid())
+            {
+                timer("ParentSeat", 250)   
+            }   
+            
+            if(Seat:isValid())
+            {
+                Seat:setPos(SeatParent:toWorld(SeatPos))
+                Seat:setAng(SeatParent:toWorld(SeatAng))
+                
+                Seat:propFreeze(1)
+            }
+            
+            if(clk("ParentSeat"))
+            {
+                Seat:parentTo(SeatParent)                 
+                Seat:setAlpha(122.5)
+                
+                E:setAlpha(255)
+                E:propGravity(0)
+                E:setMass(50000)
+                
+                SeatFound = 1
+                
+                stoptimer("ParentSeat")
+            }
+        }
+    }
+}
+
+#else
+print("Propcore is disabled or not installed")
+selfDestructAll()
+#endif
+
+
+    #[
+    function void genericArms(Counter:number, Strength:number, LEnabled:number, REnabled:number)
+    {        
+        local BS = holoEntity(3000)
+        
+        local AngularDifference = angnorm(BH:angles():yaw() - holoEntity(3000):angles():yaw()) / 180
+        
+        local OriginL = BS:toWorld(vec(AX, -AY - 25, -ArmLength + 10))
+        local OriginR = BS:toWorld(vec(AX, AY + 25, -ArmLength  + 10))
+        
+        local LB = 10
+
+        if(LEnabled)
+        {
+            local FRA = BS:forward() * (Strength * 1 - AngularDifference) + BS:up() * Strength / 3 
+            local FRB = BS:forward() * -(Strength * 1 - AngularDifference) + BS:up() * Strength / 3 
+
+            local LPoint = vec()
+                        
+            if(cConverter(0, 0.5, Counter) < 1)
+            {       
+                LPoint = bezier(OriginL + FRA, OriginL, OriginL + FRB, cConverter(0, 0.5, Counter)) 
+            }
+            else
+            {   
+                LPoint = bezier(OriginL + FRB, OriginL, OriginL + FRA, cConverter(0.5, 1, Counter)) 
+            }
+
+            BS:iks(8, 10, 12, LPoint, 0, ArmLengthA, ArmLengthB,0.45)             
+        }
+        
+        if(REnabled)
+        {          
+            local FRA = BS:forward() * (Strength * 1 - AngularDifference) + BS:up() * Strength / 3 
+            local FRB = BS:forward() * -(Strength * 1 - AngularDifference) + BS:up() * Strength / 3
+
+            local RPoint = vec()
+
+            if(cConverter(0, 0.5, Counter) < 1)
+            {  
+                RPoint = bezier(OriginR + FRB, OriginR, OriginR + FRA, cConverter(0, 0.5, Counter)) 
+            }
+            else
+            {
+                RPoint = bezier(OriginR + FRA, OriginR, OriginR + FRB, cConverter(0.5, 1, Counter)) 
+            }       
+                   
+            BS:iks(7, 9, 11, RPoint, 0, ArmLengthA, ArmLengthB,0.45) 
+        }     
+
+        holoAng(1000, slerp(quat(BH:angles()), quat(E:toWorld(ang(5 * (W|S|A|D),0,0))), 0.1):toAngle())       
+        
+        local TorsoYaw = (AimDirection:toAngle():yaw() - BH:angles():yaw()) - 180      
+        local TorsoRotation = ang(holoEntity(1000):angles():pitch(), TorsoYaw, BH:angles():roll())        
+        holoAng(2000, slerp(quat(holoEntity(2000):angles()), quat(TorsoRotation), 0.15):toAngle())
+    }
+    ]#
