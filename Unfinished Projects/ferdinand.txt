@@ -471,7 +471,7 @@ if(first())
                 }
                 else
                 {                
-                    while(HoloCounter < Amount)
+                    while(HoloCounter < Amount & perf() & holoCanCreate())
                     {                
                         local Current = Holo[HoloCounter, table]
                         
@@ -531,7 +531,7 @@ if(first())
                 }
                 else
                 {               
-                    while(ClipCounter < Amount)
+                    while(ClipCounter < Amount & perf())
                     {                                                     
                         local Current = Clip[ClipCounter, table]
                         
