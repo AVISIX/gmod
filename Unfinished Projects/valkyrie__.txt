@@ -1,0 +1,482 @@
+@name Valkyrie
+@inputs Seat:entity Cam:wirelink
+
+#Important 
+@persist [ E Driver ]:entity
+
+#Settings
+@persist [ SeatPos ]:vector [ SeatAng ]:angle
+
+#Controls
+@persist [W A S D Space Shift One Two Three Four LCtrl PC YC RC WC LC SC Hoverheight]:number
+
+#Setup related
+@persist [Holo Clip]:table [HoloCounter ClipCounter SetupProgress SeatFound]:number [  ]:string [ None ]:entity
+
+@model models/hunter/blocks/cube05x05x05.mdl
+
+#ifdef entity:setPos(vector)
+
+runOnLast(1)
+
+if(last())
+{
+    Seat:deparent()
+}
+
+if(first())
+{
+    E = entity()
+    
+    SeatAng = ang(0,-90,0)
+    SeatPos = vec(0,0,0)
+
+    Hoverheight = 150
+
+    rangerFilter(E)
+    rangerPersist(1)
+
+    function void entity:applyF(Direction:vector, Friction:vector)
+    {
+        This:applyForce((Direction - (This:vel() *  Friction)) * This:mass())
+    }      
+
+    function void entity:applyA(Angle:angle, Friction:number)
+    {
+        This:applyAngForce((Angle - (This:angVel() * Friction)) * This:mass())
+    }
+
+    function entity he(Index:number)
+    {
+        return holoEntity(Index)   
+    }
+    
+    function void holo(Index, Position:vector, Scale:vector, Angle:angle, Color:vector, Model:string, Parent, Alpha, Material:string)
+    {
+        Holo[Holo:count(), table] = table(Index, Position, Scale, Angle, Color, Model, Parent, Alpha, Material)
+    }
+
+    function void clip(Index, Position:vector, Direction:vector, Transparation)
+    {
+        Clip[Clip:count(), table] = table(Index, Position, Direction, Transparation)
+    }       
+    
+    function number buildVisuals()
+    {
+        switch(SetupProgress)
+        {
+            #Init
+            default,
+                runOnTick(1)
+                
+                SetupProgress = 1
+            break  
+            
+            #Holos
+            case 1,
+                local Amount = Holo:count()
+                
+                if(Amount <= 0)
+                {
+                    SetupProgress = 2         
+                }
+                else
+                {                
+                    while(HoloCounter < Amount & perf() & holoCanCreate())
+                    {                
+                        local Current = Holo[HoloCounter, table]
+                        
+                        local In = Current[1, number]
+                        local Po = Current[2, vector]
+                        local Sc = Current[3, vector]
+                        local An = Current[4, angle ]
+                        local Co = Current[5, vector]
+                        local Mo = Current[6, string]      
+                        local Pa = Current[7, number]
+                        local Al = Current[8, number]
+                        local Ma = Current[9, string]
+                        
+                        local Parent = holoEntity(Pa)
+                        
+                        if(Pa == 0)
+                        {
+                            Parent = entity()   
+                        }
+                        elseif(Pa < 0)
+                        {
+                            Parent = None   
+                        }
+                        
+                        local Position = Parent:toWorld(Po)
+                        local Angle    = Parent:toWorld(An)
+                        
+                        holoCreate(In)
+                        holoPos(In, Position)
+                        holoAng(In, Angle)
+                        holoColor(In, Co)
+                        holoScale(In, Sc)
+                        holoModel(In, Mo)
+                        holoAlpha(In, Al)
+                        holoMaterial(In, Ma)
+                        holoParent(In, Parent)
+                        
+                        he(In):soundPlay(In, soundDuration("buttons/blip1.wav"), "buttons/blip1.wav")
+                        
+                        HoloCounter++                  
+                    }
+                    
+                    if(HoloCounter >= Amount)
+                    {
+                        SetupProgress = 2  
+                    }
+                }
+            break
+            
+            #Clips
+            case 2,
+                local Amount = Clip:count()
+                
+                if(Amount <= 0)
+                {
+                    SetupProgress = 3       
+                }
+                else
+                {               
+                    while(ClipCounter < Amount & perf())
+                    {                                                     
+                        local Current = Clip[ClipCounter, table]
+                        
+                        local In = Current[1, number]
+                        local Po = Current[2, vector]
+                        local Di = Current[3, vector]
+                        local Tr = Current[4, number]
+                        
+                        holoClipEnabled(In, 1)
+                        holoClip(In, Po, Di, Tr)
+
+                        he(In):soundPlay(In, soundDuration("buttons/button24.wav"), "buttons/button24.wav")
+                        
+                        ClipCounter++                   
+                    }      
+                    
+                    if(ClipCounter >= Amount)
+                    {
+                        SetupProgress = 3
+                    }     
+                }     
+            break
+            
+            #Ending
+            case 3,       
+                return 1
+            break 
+        }
+        
+        return 0
+    }
+    
+    local Mat_Base = "models/props_pipes/pipemetal001a"
+    local Mat_Sec = "models/props_pipes/GutterMetal01a"
+    
+    holo(1000, vec(0,0,0), vec(1), ang(0), vec(0, 255, 0), "cube", 0, 122.5, "")
+    holo(2000, vec(0,0,50), vec(1), ang(0), vec(255, 0, 0), "cube", 1000, 122.5, "")
+    
+    holo(1, vec(0,0,100), vec(26,26,13), ang(0,0,0), vec(80), "hq_cone", 1000, 255, Mat_Base)
+    clip(1, vec(0,0,-15), vec(0,0,-1), 0)
+    
+    local Inc = 1.1
+    
+    holo(2, vec(0,0,42.6), vec(27.4*Inc,27.4*Inc,0.1), ang(0,0,0), vec(140), "hq_cone", 1000, 255, Mat_Sec)
+    
+    holo(3, vec(0,0,90), vec(32.85*Inc,32.85*Inc,12), ang(0,0,0), vec(80), "hq_cone", 1000, 255, Mat_Base)#36.51, 36.51
+    clip(3, vec(0,0,-48), vec(0,0,-1), 0)
+
+    #bottom
+
+    holo(4, vec(0,0,-54), vec(32.85*Inc,32.85*Inc,12), ang(0,0,180), vec(80), "hq_cone", 1000, 255, Mat_Base)#36.51, 36.51
+    clip(4, vec(0,0,-48), vec(0,0,-1), 0)
+
+    holo(5, vec(0,0,-5.4), vec(27.4*Inc,27.4*Inc,0.1), ang(0,0,0), vec(140), "hq_cone", 1000, 255, Mat_Sec)
+    
+    holo(6, vec(0,0,-5.4), vec(20,20,4), ang(0,0,180), vec(80), "hq_dome", 1000, 255, Mat_Base)
+    clip(6, vec(0,0,13), vec(0,0,-1),0)
+    
+    holo(7, vec(0,0,-10), vec(18,18,4), ang(0,0,180), vec(140), "hq_dome", 1000, 255, Mat_Sec)
+    
+    holo(8, vec(0,0,-32.5), vec(0.5,0.5,2), ang(0,0,0), vec(255,0,0), "cube", 1000, 255, "") # ROTATION BOTTOM GUN
+
+    #front gun shit
+    
+    local IncX = vec(0.975,1,1)
+    
+    holo(9, vec(157.5,0,15)*IncX, vec(6,7,10), ang(90 + 10, 0, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(9, vec(-8.5,0,0), vec(-1,0,0), 0)
+    
+    holo(10, vec(158.05,0,21.5)*IncX, vec(7,6.9,10), ang(90 + 0, 0, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(10, vec(8.5,0,0), vec(1,0,0), 0)
+    
+    holo(11, vec(220,0,10)*IncX, vec(2,0.5,0.5),ang(0), vec(255,0,0), "cube", 1000, 255, "")
+    
+    #left gun shit
+    
+    IncX = vec(1,0.975,1)
+    
+    holo(12, vec(0,157.5,15)*IncX, vec(6,7,10), ang(90 + 10, 90, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(12, vec(-8.5,0,0), vec(-1,0,0), 0)
+    
+    holo(13, vec(0,158.05,21.5)*IncX, vec(7,6.9,10), ang(90 + 0, 90, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(13, vec(8.5,0,0), vec(1,0,0), 0)
+    
+    holo(14, vec(0,220,10)*IncX, vec(2,0.5,0.5),ang(0,90,0), vec(255,0,0), "cube", 1000, 255, "")
+      
+    #right gun shit
+    
+    IncX = vec(1,0.975,1)
+    
+    holo(15, vec(0,-157.5,15)*IncX, vec(6,7,10), ang(90 + 10, -90, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(15, vec(-8.5,0,0), vec(-1,0,0), 0)
+    
+    holo(16, vec(0,-158.05,21.5)*IncX, vec(7,6.9,10), ang(90 + 0, -90, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(16, vec(8.5,0,0), vec(1,0,0), 0)
+    
+    holo(17, vec(0,-220,10)*IncX, vec(2,0.5,0.5),ang(0,-90,0), vec(255,0,0), "cube", 1000, 255, "")
+      
+    #back thruster shit  
+      
+    local Inc2 = vec(1.15,1.7,1.35) * 0.95 
+    IncX = vec(0.925,1,0.85)
+    
+    holo(18, vec(-137.5 - 2,0,15)*IncX*Inc2, vec(8,7,10)*Inc2, ang(90 + 10, 180, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(18, vec(-8.5,0,0)*Inc2, vec(-1,0,0), 0)
+    
+    holo(19, vec(-138.05 - 2,0,21.5)*IncX*Inc2, vec(9,6.9,10)*Inc2, ang(90 + 0, 180, 0), vec(80), "hexagon", 1000, 255, Mat_Base) 
+    clip(19, vec(8.5,0,0)*Inc2, vec(1,0,0), 0)
+    
+    holo(20, vec(-215 ,0,10)*IncX*Inc2, vec(2,0.5,0.5),ang(0,-180,0), vec(0,255,0), "cube", 1000, 255, "")
+    
+    #top (main) cannon
+    
+    holo(21, vec(0,0,85.6), vec(15.5,15.5,0.1), ang(0,180,0), vec(140), "hq_cone", 1000, 255, Mat_Sec)
+          
+    holo(22, vec(0,0,85), vec(1), ang(0), vec(255,0,0), "cube", 1000, 255, "") #top base holo
+    
+    holo(23, vec(0,0,0), vec(15,15,7), ang(0,180,0), vec(80), "hq_dome", 22, 255, Mat_Base)
+    clip(23, vec(0,0,30), vec(0,0,-1), 0)
+    
+    holo(24, vec(0,0,30), vec(10.45,10.45,0.01), ang(0,180,0), vec(140), "hq_sphere", 22, 255, Mat_Sec)
+     
+    holo(25, vec(80,0,15), vec(2,0.5,0.5), ang(0,0,0), vec(255,0,0), "cube", 22, 255, "") # top base pitch gun holo
+        
+    #top (AA) gatling
+    
+    holo(26, vec(0,30,30), vec(5,5,3), ang(0), vec(80), "hq_cylinder", 22, 255, Mat_Base)
+    
+    holo(27, vec(0,0,17.5), vec(0.5,0.5,2), ang(0), vec(255,0,0), "cube", 26, 255, "") # yaw 
+        
+    function angle aDir(Destination:vector)
+    {
+        return (E:pos() - Destination):toAngle()   
+    }
+
+    function angle entity:sAng(Ang:angle)
+    {
+        return slerp(quat(This:angles()), quat(Ang), 0.166):toAngle()      
+    }
+
+    function void weaponary(Dir:vector)
+    {
+        local Des = aDir(Dir)
+        
+        #Top Turret 
+        holoAng(22, he(22):sAng(he(1000):toWorld(ang(0,he(1000):toLocal(Des):yaw() + 180,0))))
+    }
+
+    function void flying(AimPos:vector)
+    {        
+        local AimDir = aDir(AimPos)
+
+        local P = 0 #-E:toWorld(AimDir):pitch() / 3
+        local Y = (AimDir:yaw() - E:angles():yaw())
+        local R = 0
+        
+        local Limit = 10
+        
+        if(W)
+        {
+            PC = min(PC + 2.5, Limit)
+        }
+        elseif(S)
+        {
+            PC = max(PC - 2.5, -Limit)      
+        }
+        else
+        {
+            local TargetP = -clamp(E:velL():x() / 69, -Limit, Limit) 
+            
+            if(PC > TargetP)
+            {
+                PC = max(PC - 5, TargetP)   
+            }   
+            elseif(PC < TargetP)
+            {
+                PC = min(PC + 5, TargetP)   
+            }
+            else
+            {
+                PC = TargetP   
+            }
+        }
+
+        if(D)
+        {
+            RC = min(RC + 2.5, Limit)
+        }
+        elseif(A)
+        {
+            RC = max(RC - 2.5, -Limit)      
+        }
+        else
+        {
+            local TargetP = -clamp(-E:velL():y() / 69#[ - E:angVel():yaw() / 10]#, -Limit, Limit) 
+            
+            if(RC > TargetP)
+            {
+                RC = max(RC - 5, TargetP)   
+            }   
+            elseif(RC < TargetP)
+            {
+                RC = min(RC + 5, TargetP)   
+            }
+            else
+            {
+                RC = TargetP   
+            }
+        }
+        
+        holoAng(1000, slerp(quat(holoEntity(1000):angles()), quat(E:toWorld(ang(PC,0,RC))), 0.5):toAngle())
+        
+        local Strength = 1
+        
+        local Stabilization = E:toLocal(ang(0,(E:angles():yaw() - 180) + Y, R))
+        E:applyA(((Stabilization) * Strength), 1)
+
+        local HoverHeight = Hoverheight
+
+        if(!Driver)
+        {
+            HoverHeight /= 2   
+        }
+
+        rangerFilter(E)
+        local HoverRanger = rangerOffset(HoverHeight + 1, E:toWorld(vec(0,0,0)), vec(0,0,-1))
+        
+        E:propGravity(HoverRanger:hit() || Driver:isValid() ? 0 : 1)
+
+        local Hover = (HoverRanger:position() + vec(0,0,(HoverRanger:hit()) ? HoverHeight : 0))
+        local Movement = (E:forward() * 100 * (W - S)) + (E:right() * 50 * (D - A)) + (E:up() * 75 * (Space - (LCtrl * !HoverRanger:hit())))
+        local Hoove = ((Hover - E:pos()) * 10) * HoverRanger:hit()
+        local Velocity = (HoverRanger:hit() & !(W|A|S|D|Space) ? vec(0.0325,0.0325, 0.9) : ((W|A|S|D|Space|LCtrl) ? vec(0.02) : vec(0.0325)))
+        E:applyF(Movement + Hoove, Velocity)
+    }
+
+    function void runCode()
+    {
+        Driver = Seat:driver()
+        
+        if(changed(Cam:entity():isValid()) && Cam:entity():isValid())
+        {
+            Cam["Parent", entity] = Seat   
+            Cam["Distance", number] = 200
+        }
+        
+        local AimPos = E:toWorld(vec(2000, 0, 0))
+        
+        if(Driver)
+        {
+            W = A = S = D = Space = Shift = One = Two = Three = LCtrl = 0 
+            
+            W     = Driver:keyPressed("W")
+            A     = Driver:keyPressed("A")
+            S     = Driver:keyPressed("S")
+            D     = Driver:keyPressed("D")
+            Space = Driver:keyPressed("Space")
+            Shift = Driver:keyPressed("Shift")
+            One   = Driver:keyPressed("1")
+            Two   = Driver:keyPressed("2")
+            Three = Driver:keyPressed("3")
+            LCtrl = Driver:keyPressed("LCONTROL")
+            
+            Cam["Activated", number] = 1
+            
+            rangerFilter(E)
+            rangerFilter(Seat)
+            AimPos = rangerOffset(10000, E:toWorld(vec(0,0,0)), Seat:toLocalAxis(Driver:aimPos() - Driver:shootPos())):position()
+        } 
+        else
+        {
+            Cam["Activated", number] = W = A = S = D = Space = Shift = One = Two = Three = LCtrl = 0   
+        }
+            
+        flying(AimPos)
+        weaponary(AimPos)
+    } 
+}
+
+if(1)
+{
+    local Setup = buildVisuals()
+    
+    if(Setup == 0)
+    {
+        runOnTick(1)    
+    }
+    else
+    {      
+        if(SeatFound == 1)
+        {
+            runOnTick(0)
+            
+            interval(60)
+              
+            runCode()             
+        }
+        else
+        {
+            local SeatParent = he(2000)
+               
+            if(changed(Seat:isValid()) && Seat:isValid())
+            {
+                timer("ParentSeat", 250)   
+            }   
+            
+            if(Seat:isValid())
+            {
+                Seat:setPos(SeatParent:toWorld(SeatPos))
+                Seat:setAng(SeatParent:toWorld(SeatAng))
+                
+                Seat:propFreeze(1)
+            }
+            
+            if(clk("ParentSeat"))
+            {
+                Seat:parentTo(SeatParent)                 
+                Seat:setAlpha(122.5)
+                
+                E:setAlpha(255)
+                E:propGravity(0)
+                E:setMass(50000)
+                
+                SeatFound = 1
+                
+                stoptimer("ParentSeat")
+            }
+        }
+    }
+}
+
+#else
+
+print("No Propcore enabled")
+selfDestructAll()
+
+#endif
