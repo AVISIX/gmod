@@ -1,0 +1,48 @@
+@name Combsort
+
+if(first())
+{
+    # A sorting algorithm based of Bubblesort
+
+    function array array:combSort()
+    {
+        local Step = This:count() - 1
+        local Copy = This
+        local Swapped = 1
+        while(Swapped | Step > 1)
+        {
+            Swapped = 0
+            
+            for(I = 1, Copy:count() - Step)
+            {
+                if(Copy[I, number] > Copy[I + 1, number])
+                {
+                    local Store = Copy[I + 1, number]
+                    Copy[I + 1, number] = Copy[I, number]
+                    Copy[I, number] = Store
+                    Swapped = 1   
+                }       
+            }    
+            
+            if(Step > 1)
+            {
+                Step = Step / 1.3   
+            }
+        }
+        return Copy
+    }
+
+    function array randomNumbers(Size)
+    {
+        local Result = array()
+        for(I = 1, Size)
+        {
+            Result:pushNumber(ceil(random(1, Size)))
+        }
+        return Result   
+    }
+}
+
+local Shuffled = randomNumbers(15)
+printTable(Shuffled)
+printTable(Shuffled:combSort())
