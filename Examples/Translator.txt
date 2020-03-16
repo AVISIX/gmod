@@ -1,0 +1,66 @@
+@name Translator
+@persist Requested Translated 
+@trigger all
+
+runOnHTTP(1)
+
+if( first() )
+{
+    # Extremely basic Translator using the Google Translation API
+
+    function string google(InputLang:string, OutputLang:string, Text:string)
+    {
+        return format("https://translate.googleapis.com/translate_a/single?client=gtx&sl=%s&tl=%s&dt=t&q=%s", InputLang, OutputLang, Text)   
+    }
+    
+    function number string:translateAsync(In:string, Out:string)
+    {
+        if(httpCanRequest())
+        {
+            httpRequest(google(In, Out, httpUrlEncode(This))) 
+            return 1  
+        }
+        
+        return 0
+    }
+    
+    function number onSuccess()
+    {
+        return httpClk() & httpSuccess()  
+    }
+    
+    function number onFailure()
+    {
+        return httpClk() & !httpSuccess()
+    }
+    
+    function string googleTranslated()
+    {
+        local Json = jsonDecode(httpData())
+        
+        return Json[1, table][1, table][1, string]
+    }
+}
+
+TestString = "Das ist ein Test-satz!"
+
+if(!Requested)
+{
+    Requested = TestString:translateAsync("de", "en")   
+}
+else
+{
+    if(!Translated)
+    {
+        if(onSuccess())
+        {
+            print(googleTranslated())   
+            Translated = 1
+        }
+        elseif(onFailure())
+        {
+            print("failed") 
+            Translated = 1  
+        }   
+    }       
+}

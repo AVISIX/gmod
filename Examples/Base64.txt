@@ -1,0 +1,247 @@
+@name Base64
+
+if( first() )
+{
+    # Probably the most complicated way to make a Base64 En/-Decoder lol
+
+    function string asciiToByte(Input:number)
+    {
+        local Result = ""   
+        local S = 128
+        local N = Input
+        for(I = 1, 8)
+        {
+            if(N / S >= 1)
+            {
+                Result += 1   
+                N -= S
+            }   
+            else
+            {
+                Result += 0   
+            }
+            
+            S /= 2
+        }    
+        
+        return Result  
+    }
+
+    function string byteToAscii(Input:string)
+    {
+        local Bits = Input:explode("")
+        
+        if(Bits:count() != 8)
+        {
+            return ""   
+        }
+        
+        local Result = 0   
+        local S = 128
+        for(I = 1, 8)
+        {
+            local Bit = Bits[I, string]   
+            
+            if(Bit == "1")
+            {
+                Result += S           
+            }
+            
+            S /= 2
+        }    
+        
+        return toChar(Result)
+    }
+    
+    function number sixBitToInteger(Input:string)
+    {
+        local Bits = Input:explode("")
+        
+        local S = 32
+        local Result = 0
+        foreach(I, Bit:string = Bits)
+        {
+            local B = Bit:toNumber()
+            
+            if(B == 1)
+            {
+                Result += S    
+            }         
+            
+            S /= 2
+        }     
+
+        return Result 
+    }
+    
+    function string integerTo6Bit(Input)
+    {
+        local Result = ""   
+        local S = 32
+        local N = Input
+        for(I = 1, 6)
+        {
+            if(N / S >= 1)
+            {
+                Result += 1   
+                N -= S
+            }   
+            else
+            {
+                Result += 0   
+            }
+            
+            S /= 2
+        }    
+        
+        return Result             
+    }
+    
+    function array bitCollectionTo6BitArray(ByteArr:string)
+    {
+        local Bits = ByteArr:explode("")
+
+        local Result = array()
+        
+        local C = 1
+        local SBuilder = ""
+        foreach(I, Bit:string = Bits)
+        {
+            SBuilder += Bit
+            
+            C++
+            if(C > 6)
+            {
+                Result:pushString(SBuilder)
+                SBuilder = ""
+                C = 1   
+            }
+        }
+        
+        return Result
+    }
+    
+    function array bitCollectionTo8BitArray(ByteArr:string)
+    {
+        local Bits = ByteArr:explode("")
+
+        local Result = array()
+        
+        local C = 1
+        local SBuilder = ""
+        foreach(I, Bit:string = Bits)
+        {
+            SBuilder += Bit
+            
+            C++
+            if(C > 8)
+            {
+                Result:pushString(SBuilder)
+                SBuilder = ""
+                C = 1   
+            }
+        }
+        
+        return Result           
+    }
+    
+    function string string:removeChar(Index)
+    {
+        local Result = ""
+        
+        local Chars = This:explode("")
+        
+        foreach(I, Char:string = Chars)
+        {
+            if(I != Index)
+            {
+                Result += Char   
+            }   
+        }
+        
+        return Result   
+    }
+    
+    function number array:indexForValue(Input:string)
+    {
+        local Result = 0
+        
+        foreach(I, Value:string = This)
+        {
+            if(Value == Input)
+            {
+                Result = I
+                break       
+            }   
+        }
+        
+        return Result   
+    }
+    
+    function string toBase64(Input:string)
+    {
+        if(Input:replaceRE("%s", "") == "")
+        {
+            return ""   
+        }    
+        
+        local Chars = Input:explode("")
+        
+        local BitCollection = ""
+        foreach(I, Char:string = Chars)
+        {
+            local Byte = asciiToByte(toByte(Char))
+            BitCollection += Byte      
+        }
+        
+        local SixBitArray = bitCollectionTo6BitArray(BitCollection)
+        local B64Table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=":explode("")       
+         
+        local Result = ""   
+        foreach(I, SBit:string = SixBitArray)
+        {
+            local Index = sixBitToInteger(SBit)
+            Result += B64Table[Index + 1, string]
+        }
+        
+        return Result + "="
+    }
+    
+    function string fromBase64(Input:string)
+    {
+        if(Input:replaceRE("%s", "") == "")
+        {
+            return ""   
+        }
+        elseif(Input:explode("")[Input:length(), string] != "=") # = has to be at the end of a b64 string. otherwise it isnt one
+        {
+            return ""   
+        } 
+        
+        local AInput = Input:removeChar(Input:length())
+
+        local B64Table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=":explode("")               
+        
+        local Chars = AInput:explode("")
+        local BitCollection = ""
+        
+        foreach(I, Char:string = Chars)
+        {
+            BitCollection += integerTo6Bit(B64Table:indexForValue(Char) - 1)
+        }
+        
+        local Bytes = bitCollectionTo8BitArray(BitCollection)
+        
+        local Result = ""
+        
+        foreach(I, Byte:string = Bytes)
+        {
+            Result += byteToAscii(Byte)
+        }
+            
+        return Result
+    }
+}
+B64 = toBase64("Very Cool B64 Encoder")
+print("Encoded: " + B64)
+print("Decoded: " + fromBase64(B64))
