@@ -1,0 +1,883 @@
+@name Midiplayer v3
+
+# [ Config ] #
+@persist Speed HoloCount Instrument:string OpsLimit UseGmodSounds Loop Version:string
+
+# [ General & Misc ] #
+@persist [Mode PrevMode]:string HoloC [Status ]:table HoloY HoloX
+
+# [ Functions ] #
+@persist Requesting Importing ProgLast
+
+# [ Player ] #
+@persist IsPlaying IsParsed Downloaded StartTime Playtime NoteCounter  ExpCheck
+@persist [Midi Directory]:string 
+@persist [Notes Data Counters Timetracker]:table
+@persist [ ]:array
+
+@model models/props_lab/citizenradio.mdl
+
+@trigger all
+
+if( first() )
+{  
+    Version       = "3.19"
+    Speed         = 120
+    Instrument    = "piano"
+    UseGmodSounds = 0
+    Loop          = 0
+    
+    OpsLimit = 50000
+
+    runOnChat(1)
+    runOnFile(1)
+    runOnHTTP(1)
+    runOnTick(1)
+    
+    OpsLimit = (100 / softQuota()) * OpsLimit
+
+    entity():setMass(250)
+    entity():setColor(vec(50))
+    entity():setMaterial("")
+    
+    #include "libraries/midi_library"
+    
+    Status["status", string]   = "Idle"
+    Status["tracks", table]    = table()
+    Status["filename", string] = ""
+    Status["songname", string] = ""
+    Status["author", string]   = ""
+    Status["progress", number] = 0
+    
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+
+    function number string:isUrl()
+    {
+        return min(This:findRE("(http)s?(://)"),1)
+    }
+
+    function number request(Url:string)
+    {
+        if(!Requesting & httpCanRequest())
+        {
+            httpRequest(Url)   
+            Requesting = 1
+        }
+        else
+        {
+            if(httpClk())
+            {
+                if(httpSuccess())
+                {
+                    Requesting = 0
+                    return 1    
+                } 
+                else
+                {
+                    Requesting = 0
+                    return 2   
+                }
+            }   
+        }
+    
+        return 0
+    }
+
+    function number import(Path:string)
+    {
+        if(!Importing & fileCanLoad())
+        {
+            fileLoad(Path)
+            Importing = 1   
+        }
+        else
+        {
+            if(fileClk() & !fileLoading())
+            {
+                if(fileStatus() == _FILE_OK)
+                {
+                    Importing = 0    
+                    return 1   
+                }   
+                else
+                {           
+                    Importing = 0    
+                    return 2  
+                }
+            }   
+        }  
+        
+        return 0
+    }
+
+    function void updateStatus()
+    {
+        if(curtime() > ProgLast)
+        {
+            local Name = "Sixmax' Midi Player - v" + Version
+            
+            if(Status["filename", string] != "")
+            {
+                local Fm = Status["filename", string]
+                
+                if(Fm:isUrl())
+                {
+                    Fm = Fm:replaceRE("(http)s?(://www.)", "")   
+                }
+                else
+                {
+                    Fm = Fm + ".txt"    
+                }
+                
+                Name = Name + "\nFilename: " + Fm
+            }
+    
+            if(Status["status", string] != "")
+            {
+                Name = Name + "\n\nStatus: " + Status["status", string]   
+            }
+    
+            if(Status["progress", number] > 0)
+            {
+                Name = Name + "\nProgress: " + Status["progress", number] + "%"
+            }
+            
+            if(Status["tracks", table]:count() > 0)
+            {
+                Name = Name + "\n\nTrack Count: " + Status["tracks", table]:count()   
+                        
+                for(I = 1, Status["tracks", table]:count())
+                {
+                    if(I > 3)
+                    {
+                        Name = Name + "\n..."
+                        break   
+                    }
+                
+                    local Track = Status["tracks", table][I, table]
+                    local TrackName = Track["trackname", string]
+                    
+                    Name = Name + "\n" + I + ". " + (TrackName != "" ? TrackName : "Unnamed Track")
+                }
+            }
+            
+            if(Status["speakers", number] > 0)
+            {
+                Name = Name + "\nSpeakers used: " + Status["speakers", number]   
+            }
+            
+            setName(Name)
+            
+            ProgLast = curtime() + (UseGmodSounds ? 1 : 0.5)
+        }
+    }
+
+    function string encodeFilename(Input:string)
+    {
+        local Result = Input
+        foreach(I, Reserved:string = array("<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "))
+        {
+            Result = Result:replace(Reserved, "_")   
+        }  
+        return Result
+    }
+
+    function number said(Command:string)
+    {
+        local Result = owner():lastSaid():explode(" ")[1, string] == Command & chatClk(owner())
+        if(Result)
+        {
+            hideChat(1)   
+            return 1
+        }
+        return 0
+    }
+    
+    function string told(Command:string)
+    {
+        local Last = owner():lastSaid()
+        if(Last)
+        {     
+            if(Last:explode(" ")[1, string] == Command & chatClk(owner()))
+            {
+                hideChat(1)
+                return Last:sub(Command:length() + 2, Last:length())   
+            }
+        }
+        return ""
+    }
+
+    function void setMode(NewMode:string)
+    {
+        PrevMode = Mode
+        Mode     = NewMode
+    } 
+
+    function void pOut(Color:vector, Code:string, Message:string, Sound:string)
+    {
+        printColor(vec(0), ">> [", Color, Code, vec(0), "] ", vec(255), Message)     
+        entity():soundPlay(hash(Code + Message), 2, Sound)      
+    }
+
+    function void errOut(Code:string)
+    {
+        pOut(vec(255,0,0), "Error", Code, "buttons/button8.wav") 
+    }
+
+    function void sucOut(Code:string)
+    {
+        pOut(vec(0,255,0), "Success", Code, "buttons/button9.wav")         
+    }
+
+    function void warOut(Code:string)
+    {
+        pOut(vec(255,255,0), "Warning", Code, "buttons/button4.wav")    
+    }
+
+    function void zSpeaker(I, Vol, Pitch)
+    {
+        local CurPos = entity():toLocal(holoEntity(I):pos()):setZ(0)
+        local Extra = ((8 / 255) * Pitch) #* Vol
+        holoPos(I, entity():toWorld(CurPos + vec(0,0,11 + Extra)))
+    }
+
+    function void halt()
+    {
+        Playtime      = 0
+        IsPlaying     = 0
+        Importing     = 0
+        Requesting    = 0
+        IsDownloading = 0
+        Downloaded    = 0
+        IsParsed      = 0
+        NoteCounter   = 1
+        Midi          = ""
+        Data          = table()
+        Counters      = table()
+        Directory     = "" 
+              
+        midiLibReset()
+        
+        foreach(I, Index:number = Notes:keys())
+        {     
+            soundStop(Notes[Index, table]["sid", string])     
+            zSpeaker(Notes[Index, table]["hindex", number], 0, 0)     
+        }
+
+        Notes = table()
+
+        Status["status", string]   = "Idle"
+        Status["tracks", table]    = table()
+        Status["filename", string] = ""
+        Status["songname", string] = ""
+        Status["author", string]   = ""
+        Status["progress", number] = 0
+        Status["speakers", number] = 0
+        Status["speakers", number] = 0
+    }
+
+    function number table:playtime()
+    {
+        local Result = 0
+        for(I = 1, This:count())
+        {
+            local Track = This[I, table]
+            local Timing = Track[Track:count(), table]["timing", number]
+            if(Result < Timing)
+            {
+                Result = Timing   
+            }
+        }       
+        return Result / Speed  
+    }
+
+    function void playback(Dir:string)
+    {
+        halt()
+        Directory = Dir:replaceRE("%s", "")
+        setMode("loadMidi")        
+    }
+
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+    function void checkForExpiredNotes()
+    {
+        foreach(I, Index:number = Notes:keys())
+        {     
+            local Note = Notes[Index, table] 
+            local End  = Note["start", number] + Note["length", number]
+            if(curtime() > End + 0.1)
+            {
+                Notes:removeTable(Index)
+                Notes:removeTable(Index:toString())
+                zSpeaker(Note["hindex", number], 0, 0)
+            } 
+        }              
+    }    
+    
+    function void backgroundWorker()
+    {        
+        updateStatus()
+
+        if(IsPlaying)
+        {
+            if(curtime() > ExpCheck & perf(OpsLimit))
+            {            
+                checkForExpiredNotes()                 
+                Status["speakers", number] = Notes:count()
+                ExpCheck = curtime() + 0.75 # (UseGmodSounds ? 0.5 : 0.825)
+            }   
+        }
+    }
+    
+    function string bool(N)
+    {
+        return N ? "true" : "false"   
+    }
+    
+    function void chatCommands()
+    {
+        local Play = told("/play")
+        local Save = told("/save")
+        local SSP  = told("/speed")
+   
+        if(Play)
+        {
+            playback(Play)
+        }   
+        elseif(Save)
+        {
+            local Filename = Save
+            
+            if(Filename:replaceRE("%s", "") != "")
+            {               
+                if(fileCanWrite())
+                {
+                    Filename = encodeFilename(Filename)
+                   
+                    fileWrite(">e2shared/MidiParser/" + Filename + ".txt", Midi)
+                    
+                    sucOut("Midi saved as: " + Filename + ".txt, in e2shared/midiparser/.")
+                }
+                else
+                {
+                    errOut("Please wait a moment, before saving another Midi.")
+                }    
+            }      
+            else
+            {
+                errOut("Invalid Filename.")    
+            }                 
+        }   
+        elseif(said("/stop"))
+        {
+            sucOut("All Events have been stopped")
+            setMode("resetPlayer")
+        }
+        elseif(SSP)
+        {
+            Speed = SSP:toNumber()
+            sucOut("Speed has been set to: " + Speed)  
+        }
+        elseif(said("/loop"))
+        {
+            Loop = !Loop
+            sucOut("Looping has been toggled to: " + bool(Loop))   
+        }
+        elseif(said("/swap"))
+        {
+            UseGmodSounds = !UseGmodSounds
+            sucOut("UseGmodSounds has been toggled to: " + bool(UseGmodSounds))      
+        }
+    }
+
+    function void loadMidi()
+    {
+        if(!Directory)
+        {
+            errOut("Invalid Path or Url.")
+            setMode("resetPlayer")
+            return      
+        }
+        
+        Status["status", string] = "Loading Midi..."
+        
+        local IsUrl = Directory:isUrl()
+        
+        Status["filename", string] = Directory
+        
+        switch(Downloaded)
+        {
+            case 0,
+                if(IsUrl)
+                {
+                    Downloaded = request(Directory)            
+                }
+                else
+                {
+                    Downloaded = import(">e2shared/midiparser/" + Directory + ".txt")
+                }            
+            break  
+            
+            case 1,
+                Midi = IsUrl ? httpData() : fileRead()               
+                if(!min(Midi:findRE("^(MThd).*"), 1))
+                {
+                    errOut("Not a Midi file.")
+                    setMode("resetPlayer")
+                }             
+                else
+                {
+                    sucOut("Midi loaded.")
+                    setMode("runParser")
+                }
+            break
+            
+            case 2,
+                if(IsUrl)
+                {
+                    errOut("Invalid Url.")   
+                }
+                else
+                {
+                    if(fileStatus() == _FILE_404)
+                    {
+                        errOut("Invalid File.")   
+                    }
+                    elseif(fileStatus() == _FILE_UNKNOWN)
+                    {
+                        errOut("File Unknown.")   
+                    }
+                    elseif(fileStatus() == _FILE_TIMEOUT)
+                    {
+                        errOut("File timed out.")   
+                    }
+                }                
+                setMode("resetPlayer") 
+            break
+            
+            default,
+                errOut("Invalid Download-State.")
+                setMode("resetPlayer")
+            break
+        }
+    }
+
+    function void runParser()
+    {
+        if(!IsParsed)
+        {   
+            Status["status", string] = "Parsing Midi..."
+            Status["progress", number] = ceil(MidiParsingProgress, 1)
+            
+            Data = Midi:parseMidi(Speed, 0)           
+            IsParsed = !isParsingMidi()               
+        }
+        else
+        {
+            if(Data:count() > 6)
+            {
+                warOut("High amount of Tracks detected. Playback might fall out of sync.")   
+            }
+
+            Status["tracks", table] = MidiMeta
+            sucOut("Midi Parsed.")
+            setMode("playMidi")   
+        }
+    }
+
+    NoteCounter = 1
+
+    function string soundForNote(Pitch)
+    {
+        local Note = Pitch 
+        
+        if(Note >= 36 & Note <= 95)
+        {
+            local RealNotes = array()
+            
+            RealNotes[36, string] = "a1"
+            RealNotes[37, string] = "b1"
+            RealNotes[38, string] = "a2"
+            RealNotes[39, string] = "b2"
+            RealNotes[40, string] = "a3"
+            RealNotes[41, string] = "a4"
+            RealNotes[42, string] = "b3"
+            RealNotes[43, string] = "a5"
+            RealNotes[44, string] = "b4"
+            RealNotes[45, string] = "a6"
+            RealNotes[46, string] = "b5"
+            RealNotes[47, string] = "a7"
+            RealNotes[48, string] = "a8"
+            RealNotes[49, string] = "b6"
+            RealNotes[50, string] = "a9"
+            RealNotes[51, string] = "b7"
+            RealNotes[52, string] = "a10"
+            RealNotes[53, string] = "a11"
+            RealNotes[54, string] = "b8" 
+            RealNotes[55, string] = "a12"
+            RealNotes[56, string] = "b9" 
+            RealNotes[57, string] = "a13"
+            RealNotes[58, string] = "b10"
+            RealNotes[59, string] = "a14"
+            RealNotes[60, string] = "a15"
+            RealNotes[61, string] = "b11"
+            RealNotes[62, string] = "a16"
+            RealNotes[63, string] = "b12"
+            RealNotes[64, string] = "a17"
+            RealNotes[65, string] = "a18"
+            RealNotes[66, string] = "b13"
+            RealNotes[67, string] = "a19"
+            RealNotes[68, string] = "b14"
+            RealNotes[69, string] = "a20"
+            RealNotes[70, string] = "b15"
+            RealNotes[71, string] = "a21"
+            RealNotes[72, string] = "a22"
+            RealNotes[73, string] = "b16"
+            RealNotes[74, string] = "a23"
+            RealNotes[75, string] = "b17"
+            RealNotes[76, string] = "a24"
+            RealNotes[77, string] = "a25"
+            RealNotes[78, string] = "b18"
+            RealNotes[79, string] = "a26"
+            RealNotes[80, string] = "b19"
+            RealNotes[81, string] = "a27"
+            RealNotes[82, string] = "b20"
+            RealNotes[83, string] = "a28"
+            RealNotes[84, string] = "a29"
+            RealNotes[85, string] = "b21"
+            RealNotes[86, string] = "a30"
+            RealNotes[87, string] = "b22"
+            RealNotes[88, string] = "a31"
+            RealNotes[89, string] = "a32"
+            RealNotes[90, string] = "b23"
+            RealNotes[91, string] = "a33"
+            RealNotes[92, string] = "b24"
+            RealNotes[93, string] = "a34"
+            RealNotes[94, string] = "b25"
+            RealNotes[95, string] = "a35"
+            
+            return RealNotes[Note, string]
+        }
+        elseif(Note < 36)
+        {
+            return "instruments/bass.wav"   
+        }
+        
+        return "instruments/hi_hat.wav"
+    }
+
+    function string gmodSoundForPitch(Pitch)
+    {  
+        if(Pitch <= 7.5)
+        {
+            return "instruments/bass.wav"   
+        }
+        
+        if(Pitch >= 165 & Pitch < 185)
+        {
+            return "instruments/snare.wav"   
+        }
+        
+        if(Pitch >= 185 & Pitch < 200)
+        {
+            return "instruments/high_tom.wav"   
+        }
+
+        if(Pitch >= 200 & Pitch < 225)
+        {
+            return "instruments/hi_hat.wav"   
+        }
+        
+        if(Pitch >= 225)
+        {
+            return "instruments/cymbal.wav"    
+        }
+        
+        if(Pitch > 7.5 & Pitch <= 15)
+        {
+            return "instruments/pianoc.wav"   
+        }
+           
+        if(Pitch > 15 & Pitch < 60)
+        {
+            return "synth/triangle_440.wav"   
+        }
+
+        if(Pitch > 60 & Pitch < 100)
+        {
+            return "synth/sine_440.wav"   
+        }
+        
+        if(Pitch > 100 & Pitch < 145)
+        {
+            return "synth/tri.wav"   
+        }
+        
+        return ""                 
+    }
+
+    function void stopNote(Note, Channel)
+    {
+        local SoundID = floor(Note ^ Channel):toString()
+        
+        foreach(I, Index:number = Notes:keys())
+        {     
+            if(Notes[Index, table]["sid", string] == SoundID)
+            {
+                zSpeaker(Notes[Index, table]["hindex",number], 0, 0)
+                soundStop(SoundID)
+                Notes:removeTable(Index)
+                Notes:removeTable(Index:toString())
+                break   
+            }
+        }        
+    }
+    
+    function void playNote(Note, Channel, Volume, Pitch, Duration)
+    {
+        if(perf(OpsLimit))
+        {
+            local SpeakerIndex = random(1, HoloCount)
+                   
+            local ReRolls = min(10, HoloCount)
+            while(ReRolls > 0 & perf(OpsLimit))
+            {
+                if(Notes:exists(holoEntity(SpeakerIndex):id()))
+                {
+                    SpeakerIndex = random(1, HoloCount) 
+                    ReRolls--
+                    continue
+                }
+                       
+                break              
+            }
+    
+            local Speaker = holoEntity(SpeakerIndex)
+            local SoundID = floor(Note ^ Channel):toString()  
+            
+            if(ReRolls <= 0)
+            {
+                soundStop(SoundID)
+                #stopNote(Note, Channel)
+            }                
+                  
+            local SID = ""    
+            local Default = "synth/triangle_440.wav"
+            if(UseGmodSounds)
+            {
+                SID = gmodSoundForPitch(Pitch)
+                if(!SID)
+                {
+                    SID = Default 
+                }
+            }
+            else
+            {
+                SID = "gmodtower/lobby/instruments/" + Instrument + "/" + soundForNote(Note) + ".wav"    
+            }
+            
+            local Fade = 0
+            local PTime = 0      
+            if(Duration >= soundDuration(SID))
+            {
+                PTime = Duration   
+            }
+            else
+            {
+                PTime = 0.001
+                Fade = Duration
+            }
+            
+            Speaker:soundPlay(SoundID, PTime, SID, Fade)
+    
+            zSpeaker(SpeakerIndex, Volume, Pitch)
+    
+            if(UseGmodSounds & SID:find("synth"))
+            {
+                soundPitch(SoundID, Pitch)   
+            }
+            else
+            {
+                if(!UseGmodSounds)
+                {
+                    soundVolume(SoundID, Volume)       
+                }    
+            }
+    
+            Notes[Speaker:id(), table] = table("sid"=SoundID,"note"=Note, "hindex"=SpeakerIndex,"channel"=Channel,"start"=curtime(), "length"=Duration)
+        }
+    }
+    
+    function number table:getTimeDelta(Current, Channel, Note)
+    {
+        local I = Current + 1
+        local Event = This[I, table]
+        while(Event["note", number] != Note & Event["channel", number] != Channel & perf(OpsLimit))
+        {
+            I++
+            
+            if(I >= This:count() | I > 2)
+            {
+                break 
+            }    
+            
+            Event = This[I, table]  
+        }   
+        
+        return I    
+    }
+
+    function void playMidi()
+    {     
+        if(!IsPlaying)
+        {
+            Status["status", string] = "Playing Midi"
+
+            StartTime = curtime()
+            IsPlaying = 1           
+            Playtime = Data:playtime()
+            
+            for(I = 1, Data:count())
+            {
+                if(Data[I, table]:count() > 0)
+                {
+                    Counters[I, number] = 1                      
+                }
+                else
+                {
+                    Data:removeTable(I)    
+                } 
+            }
+        }
+        else
+        {    
+            local Timing = curtime() - StartTime
+                       
+            foreach(I, Index:number = Data:keys())
+            {
+                local Track = Data[Index, table]
+                local Counter = Counters[Index, number]
+            
+                if(Counter >= Track:count() + 1) 
+                {
+                    continue   
+                }
+                
+                local Event = Track[Counter, table]
+                
+                local Playpoint = floor(Event["timing", number] / Speed, 2)
+             
+                if(Timing >= Playpoint)
+                {                 
+                    local Type    = Event["type",    string]
+                    local Pitch   = Event["pitch",   number]
+                    local Volume  = Event["volume",  number]   
+                    local Channel = Event["channel", number]
+                    local Note    = Event["note",    number]
+
+                    local CurEvent = Track:getTimeDelta(Counter, Note, Channel)       
+                               
+                    local Playwindow = (Track[CurEvent, table]["timing", number] / Speed - Playpoint) * 1.1
+                
+                    if(Type == "noteon")
+                    {
+                        if(Playwindow > 0.025 & Volume > 0.15)
+                        {
+                            playNote(Note, Channel, Volume, Pitch, Playwindow)  
+                        } 
+                    }
+                    else
+                    {
+                        soundStop(floor(Note ^ Channel):toString())
+                        #stopNote(Note, Channel)   
+                    }                    
+                    
+                    Counters[Index, number] = Counters[Index, number] + 1
+                }                                       
+            }
+            
+            Status["progress", number] = clamp(ceil((100 / Playtime) * Timing, 1),0,100)
+                
+            if(Timing > Playtime)
+            {
+                IsPlaying = 0
+                    
+                if(!Loop)
+                {
+                    hint("Playback finished", 3)
+                    setMode("resetPlayer")  
+                }
+            }             
+        }
+    }
+
+    function void resetPlayer()
+    {
+        halt()
+        setMode("idle")  
+    }
+
+    HoloCount = 121
+
+    function void init()
+    {    
+        local Square = ceil(sqrt(HoloCount))
+        
+        while(HoloC < HoloCount & perf() & holoCanCreate())
+        {        
+            holoCreate(HoloC)
+            holoParent(HoloC, entity())
+            holoColor(HoloC, hsv2rgb((360 / HoloCount) * HoloC, 1, 1))
+            holoScale(HoloC, (vec(1) / Square) * 0.6 + vec(0,0,1))
+            holoMaterial(HoloC, "debug/debugdrawflat")
+            holoPos(HoloC, entity():toWorld(vec(HoloX - Square / 2 + 0.5, HoloY - Square / 2 + 0.5, 11)))
+        
+            HoloX++
+            if(HoloX >= Square)
+            {
+                HoloX = 0
+                HoloY++   
+            }
+        
+            HoloC = clamp(HoloC + 1, 1, HoloCount) 
+        }       
+        
+        if(HoloC >= HoloCount)
+        {
+            holoCreate(HoloC + 1, entity():toWorld(vec(0, 0, 17)))
+            holoScaleUnits(HoloC + 1, vec(Square, Square, 0.5))
+            holoColor(HoloC + 1, vec(40))
+            holoMaterial(HoloC + 1, "debug/debugdrawflat")
+            holoParent(HoloC + 1, entity())
+            
+            sucOut("Initialized.")         
+            setMode("idle")  
+        }         
+    }
+    
+    function void idle()
+    { 
+        Status["status", string] = "Idle"
+    }
+    
+    setMode("init")
+}
+
+if(perf(OpsLimit))
+{
+    if(Mode != "init")
+    {
+        chatCommands()
+        backgroundWorker()
+    }
+}
+  
+Mode()
+
+
