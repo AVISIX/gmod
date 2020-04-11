@@ -24,6 +24,7 @@ if( first() )
                 > Format
                 > Trackcount
                 > Division
+                > Playtime
             
             tracks:.
                 n: 
@@ -41,6 +42,7 @@ if( first() )
                             > type
                             > volume
                             > pitch
+                            > delta 
                             > timing
         
         
@@ -230,6 +232,10 @@ if( first() )
                         MidiInTrack     = 1   
                         LastStatus      = 0
                     }  
+                    else
+                    {
+                        error("Failed to find next Track.")   
+                    }
                 }   
                 else
                 {
