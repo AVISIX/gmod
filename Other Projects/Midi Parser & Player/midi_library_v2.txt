@@ -4,7 +4,7 @@
 @persist MidiPerf 
 
 # [ Parser ] #
-@persist MidiBuffer MidiParsing MidiTempo LastStatus MidiDone MidiInTrack
+@persist MidiBuffer MidiParsing MidiTempo LastStatus MidiDone MidiInTrack MidiParsingProgress LongestTime
 @persist [MidiResult TempTrack]:table
 
 # [ Debug ] #
@@ -55,8 +55,9 @@ if( first() )
         MidiTempo   = 120
         LastStatus  = -1
 
-        MidiDebugImporting = 0
-        MidiDebugImported  = 0    
+        MidiParsingProgress = 0
+        MidiDebugImporting  = 0
+        MidiDebugImported   = 0    
         
         TempTrack                   = table()       
         MidiResult                  = table()
@@ -116,6 +117,11 @@ if( first() )
         return Temp
     }
 
+    function string string:peekLength(Len)
+    {
+        return This:sub(MidiBuffer, MidiBuffer + Len)   
+    }
+
     function number string:hexToNumber()
     {
         local Result = "0x"     
@@ -167,6 +173,8 @@ if( first() )
         {       
             if(MidiDone & !MidiParsing)
             {
+                MidiBuffer = 0
+                
                 if(This:readLength(4) != "MThd")
                 {
                     error("The given string was not a Midi Bytecode.")   
@@ -201,29 +209,27 @@ if( first() )
                 MidiResult["header", table]["format", number]   = Format
                 MidiResult["header", table]["tracks", number]   = Tracks
                 MidiResult["header", table]["division", number] = This:readLength(2):hexToNumber()      
+                MidiResult["header", table]["playtime", number] = 0
                 MidiResult["tracks", table]                     = table()
                 
-                MidiTempo   = Tempo
-                LastStatus  = 0
-                MidiDone    = 0
-                MidiParsing = 1      
-                MidiInTrack = 0
+                MidiTempo           = Tempo
+                LastStatus          = 0
+                MidiDone            = 0
+                MidiParsing         = 1      
+                MidiInTrack         = 0                
+                MidiParsingProgress = 0
             }   
             else
             {
                 if(!MidiInTrack)
-                {
+                {   
                     if(This:readLength(4) == "MTrk")
                     {
                         local TrackSize = This:readLength(4):hexToNumber()
                         TempTrack       = table("meta"=table("playtime"=0),"events"=table())
                         MidiInTrack     = 1   
                         LastStatus      = 0
-                    }       
-                    else
-                    {
-                        error("The passed string is not a Midi.")   
-                    }
+                    }  
                 }   
                 else
                 {
@@ -243,10 +249,13 @@ if( first() )
                     
                             switch(MetaType)
                             {
-                                case 0x2F,
-                                MidiInTrack = 0
-                                MidiResult["tracks", table]:pushTable(TempTrack)
-                                continue                                
+                                case 0x2F,                           
+                                if(TempTrack["meta", table]["playtime", number] > MidiResult["header", table]["playtime", number])
+                                {
+                                    MidiResult["header", table]["playtime", number] = TempTrack["meta", table]["playtime", number]   
+                                }
+                                MidiInTrack = 0                                
+                                MidiResult["tracks", table][MidiResult["tracks", table]:count() + 1, table] = TempTrack                                   
                                 break   
                                 
                                 case 0x01,
@@ -281,12 +290,12 @@ if( first() )
                                 MidiTempo = round(60000000 / MetaValue:hexToNumber())  
                                 break
                                 
-                                case 0x00,
-                                case 0x05,
-                                case 0x06,
-                                case 0x07,
-                                case 0x58,
-                                case 0x59,
+                                case 0x00, 
+                                case 0x05, 
+                                case 0x06, 
+                                case 0x07, 
+                                case 0x58, 
+                                case 0x59, 
                                 break
                             }
                         }
@@ -360,15 +369,30 @@ if( first() )
                         }    
                         
                         LastStatus = Status                          
-                    } 
+                    }                 
                 }     
             }
             
+            MidiParsingProgress = (100 / This:length()) * MidiBuffer
+            
             if(MidiBuffer >= This:length())
             {
-                MidiDone    = 1
-                MidiParsing = 0
-                Result      = MidiResult
+                if(MidiInTrack)
+                {
+                    if(TempTrack["meta", table]["playtime", number] > MidiResult["header", table]["playtime", number])
+                    {
+                        MidiResult["header", table]["playtime", number] = TempTrack["meta", table]["playtime", number]   
+                    }
+                    MidiInTrack = 0                                
+                    MidiResult["tracks", table]:pushTable(TempTrack)       
+                    TempTrack = table("meta"=table("playtime"=0),"events"=table())
+                }
+                
+                MidiParsingProgress = 100
+                MidiDone            = 1
+                MidiParsing         = 0
+                MidiBuffer          = 0
+                Result              = MidiResult
                 break   
             }
         }
@@ -378,7 +402,17 @@ if( first() )
     
     function number isParsing()
     {
-        return MidiDone & !MidiParsing    
+        return !MidiDone & MidiParsing    
+    }
+    
+    function number parsingDone()
+    {
+        return !isParsing()   
+    }
+
+    function number getParsingProgress()
+    {
+        return MidiParsingProgress  
     }
     
     function void midiLibDebug(File:string)
@@ -417,7 +451,7 @@ if( first() )
             {
                 fileRead():decodeMidi(120)  
             
-                MidiDebugDone = isParsing()
+                MidiDebugDone = parsingDone()
             } 
                   
             if(changed(MidiDebugDone) & MidiDebugDone)
@@ -426,6 +460,10 @@ if( first() )
                 MidiDebugImported  = 0
               
                 printTable(MidiResult)    
+           #     print(MidiResult["tracks", table]:count())
+                
+                runOnFile(0)
+                runOnTick(0)
             }
         }        
     }
