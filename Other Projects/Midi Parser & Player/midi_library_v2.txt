@@ -26,7 +26,7 @@ if( first() )
                 > Division
                 > Playtime
             
-            tracks:.
+            tracks:
                 n: 
                     meta:
                         > text
@@ -119,11 +119,6 @@ if( first() )
         return Temp
     }
 
-    function string string:peekLength(Len)
-    {
-        return This:sub(MidiBuffer, MidiBuffer + Len)   
-    }
-
     function number string:hexToNumber()
     {
         local Result = "0x"     
@@ -164,7 +159,7 @@ if( first() )
 
     function number realtime(Delta, A, B)
     {
-        return (Delta * 60) / (max(A, 1) * max(B, 1))   
+        return (Delta * 60) / (A * B)   
     }   
     
     function table string:decodeMidi(Tempo:number)
@@ -204,13 +199,20 @@ if( first() )
                     error("Cannot have multiple tracks with type 0 format.")   
                 }
 
+                local Division = This:readLength(2):hexToNumber()    
+                
+                if(Division <= 0)
+                {
+                    Division = 120   
+                }
+
                 TempTrack                   = table()       
                 MidiResult                  = table()
                 MidiResult["header", table] = table()
                         
                 MidiResult["header", table]["format", number]   = Format
                 MidiResult["header", table]["tracks", number]   = Tracks
-                MidiResult["header", table]["division", number] = This:readLength(2):hexToNumber()      
+                MidiResult["header", table]["division", number] = Division
                 MidiResult["header", table]["playtime", number] = 0
                 MidiResult["tracks", table]                     = table()
                 
@@ -345,8 +347,8 @@ if( first() )
                                             Type = "Note Off"   
                                         }
                                         
-                                        local Volume = pitch(Note)
-                                        local Pitch  = volume(Velocity)
+                                        local Volume = volume(Velocity)
+                                        local Pitch  = pitch(Note)
                                         
                                         TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = Type,
                                                                                                                           "note"     = Note,
@@ -394,6 +396,7 @@ if( first() )
                     TempTrack = table("meta"=table("playtime"=0),"events"=table())
                 }
                 
+                MidiTempo           = 120
                 MidiParsingProgress = 100
                 MidiDone            = 1
                 MidiParsing         = 0
