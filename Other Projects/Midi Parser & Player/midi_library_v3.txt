@@ -12,6 +12,25 @@
 
 if( first() )
 {
+    #[
+        Garry's Mod Expression 2 Midi Parsing Library, made by Sixmax.
+        
+        To hear everything make sure to download the "Playable Piano"-Addon from the Workshop.
+        
+        Also a good thing to do is exceed the sound limitations from E2.
+        
+        What I use:
+           wire_expression2_maxsounds 150
+           wire_expression2_sound_burst_max 150
+           wire_expression2_sound_burst_rate 0
+        
+        Those Convars have to be changed in the Server console or set as startup in the autocexec file.
+
+        
+        To add more sounds, edit the tables below & the base49, instrument4Program functions.
+        Make sure to follow the specific Midi Mapping: https://www.midi.org/specifications/item/gm-level-1-sound-set    
+    ]#
+            
     MidiPerf = 90
 
     SoundDurationBank = table()
@@ -102,6 +121,11 @@ if( first() )
         {
             return VanillaBank["snare", string]   
         }
+        
+        if(Key == 53 | Key == 56)
+        {
+            return "wowozela/samples/bell.wav"
+        }
          
         return VanillaBank["bass", string]      
     }
@@ -113,11 +137,17 @@ if( first() )
         local P = Program + 1
         if(P <= 8)
         {
+            if(P == 5 | P == 6)
+            {
+                return "wowozela/samples/pianostab.wav"   
+            }
+            
             return "piano"   
         }
         
         if(P <= 16)
         {
+            return "wowozela/samples/dingdong.wav"
             # Chromatic Percussion   
         }
         
@@ -148,6 +178,11 @@ if( first() )
                 return "harp"   
             }
             
+            if(P == 51 | P == 52)
+            {
+                return "wowozela/samples/string.wav"   
+            }
+            
             return "violin"  
         }
         
@@ -158,6 +193,11 @@ if( first() )
         
         if(P <= 72)
         {
+            if(P == 57)
+            {
+                return "wowozela/samples/skull.wav"   
+            }
+            
             if(P >= 65 & P <= 68)
             {
                 return "sax"   
@@ -178,6 +218,7 @@ if( first() )
             }
             
          #   return "synth/tri.wav"
+            return "synthesizer"
         }
         
         if(P <= 96)
@@ -484,13 +525,13 @@ if( first() )
                 MidiResult["header", table]["playtime", number] = 0
                 MidiResult["tracks", table]                     = table()
                 
-                MidiTempo           = Tempo
+                MidiTempo             = Tempo
                 MidiTotalSoundsLoaded = 0
-                LastStatus          = 0
-                MidiDone            = 0
-                MidiParsing         = 1      
-                MidiInTrack         = 0                
-                MidiParsingProgress = 0
+                LastStatus            = 0
+                MidiDone              = 0
+                MidiParsing           = 1      
+                MidiInTrack           = 0                
+                MidiParsingProgress   = 0
             }   
             else
             {
