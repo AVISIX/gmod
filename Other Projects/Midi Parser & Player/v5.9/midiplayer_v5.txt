@@ -10,12 +10,12 @@
 @persist Requesting Importing ProgLast Archiving ArLoaded ArLoading
  
 # [ Player ] #
-@persist IsPlaying IsParsed Downloaded StartTime Playtime NoteCounter ExpCheck PrevZ
+@persist IsPlaying IsParsed Downloaded StartTime Playtime NoteCounter ExpCheck PrevZ PitchBuff PrevSid
 @persist [Midi Directory]:string 
 @persist [Notes Data Counters Timetracker AltSounds]:table
 @persist [ AvSpeakers Instruments  ]:array
 
-@model models/props_lab/reciever01b.mdl
+#@model models/props_lab/reciever01b.mdl
 
 @trigger all
 
@@ -35,12 +35,11 @@ if(first())
            wire_expression2_sound_burst_rate 0
         
         Those Convars have to be changed in the Server console or set as startup in the autocexec file.
-
     ]#
     
     
-    Version       = "5.9"
-    LastUpdate    = "More Sounds Update"
+    Version       = "5.95"
+    LastUpdate    = "Sound Enhancement Update"
     Speed         = 120
     Loop          = 0
     HoloCount     = 150
@@ -49,8 +48,11 @@ if(first())
     
     runOnChat(1)
     runOnFile(1)
+    #ifdef runOnHTTP(1)
     runOnHTTP(1)
+    #endif
     runOnTick(1)  
+    runOnLast(1)
 
     OpsLimit = (100 / softQuota()) * OpsLimit
 
@@ -76,9 +78,10 @@ if(first())
     {
         return min(This:findRE("(http)s?(://)"),1)
     }
-
+    
     function number request(Url:string)
     {
+        #ifdef runOnHTTP(number)
         if(!Requesting & httpCanRequest())
         {
             httpRequest(Url)   
@@ -100,6 +103,7 @@ if(first())
                 }
             }   
         }
+        #endif
     
         return 0
     }
@@ -277,7 +281,7 @@ if(first())
             {
                 local Index = HoloC + I
                 local CurPos = entity():toLocal(holoEntity(Index):pos()):setZ(0)
-                holoPos(Index, entity():toWorld(CurPos + vec(0,0,3.5 + Extra)))            
+                holoPos(Index, entity():toWorld(CurPos + vec(0,0,1.5 + Extra)))            
                 PrevZ = Extra
             }
         } 
@@ -285,7 +289,7 @@ if(first())
 
     function void resetSounds()
     {
-        AvSpeakers = array()
+        AvSpeakers:clear()
         
         for(I = 1, HoloCount)
         {
@@ -298,11 +302,12 @@ if(first())
             zChannel(I, 0, 1)
         }   
         
-        Notes = table()    
+        Notes:clear()
     }
 
     function void halt()
     {
+        PitchBuff     = 0
         Playtime      = 0
         IsPlaying     = 0
         Importing     = 0
@@ -322,8 +327,6 @@ if(first())
         midiLibReset()
     
         resetSounds()
-
-        Notes = table()
 
         Status["status", string]   = "Idle"
         Status["tracks", table]    = table()
@@ -359,6 +362,10 @@ if(first())
             {
                 if(Notes[I, table]:count())
                 {
+                    if(!PowerSaving)
+                    {
+                        zChannel(Note["channel", number], 0, 0)
+                    }
                     soundStop(SoundID)
                     Notes:remove(I)
                     AvSpeakers:pushNumber(SpeakerNumber) 
@@ -477,7 +484,12 @@ if(first())
             break  
             
             case 1,
-                Midi = IsUrl ? httpData() : fileRead()               
+                #ifdef httpData()
+                Midi = IsUrl ? httpData() : fileRead()       
+                #else
+                Midi = fileRead()
+                #endif
+                        
                 if(!min(Midi:findRE("^(MThd).*"), 1))
                 {
                     errOut("Not a Midi file.")
@@ -545,7 +557,7 @@ if(first())
         }
     }
 
-    function void playNote(Note, Channel, Sound:string, Pitch, Volume, Timeframe, Duration)
+    function void playNote(Note, Channel, Sound:string, Pitch, Volume, Duration, Sid)
     {
         if(!AvSpeakers:count())
         {
@@ -557,52 +569,61 @@ if(first())
         
         local SpeakerNumber = randint(1, AvSpeakers:count())
         local Speaker       = holoEntity(AvSpeakers[SpeakerNumber, number])
-        local Sid           = floor(((Note * Channel) * SpeakerNumber) * max(Volume, 0.001)) + randint(1, 7777777)        
-
-        local Lowest    = 0.2
-        local SoundFade = max(Timeframe, Lowest * 0.8)
-        local SoundTime = clamp(Duration, Lowest * 1.2, max(Timeframe - SoundFade, Lowest)) 
-
-        Speaker:soundPlay(Sid, SoundTime, Sound, SoundFade)
-        soundVolume(Sid, max(Volume, 0.15))
-        soundPitch(Sid, Pitch)  
         
+        Speaker:soundPlay(Sid, Duration, Sound)
+        soundVolume(Sid, Volume)
+        if(Pitch != 100)
+        {
+            soundPitch(Sid, Pitch)  
+        }
+
         zChannel(Channel, Note, 0)
-        local TotalPlaytime = (SoundTime + SoundFade) * 1.5
-        
+
         AvSpeakers:remove(SpeakerNumber)
-        Notes:pushTable(table("speaker"=SpeakerNumber, "ncc"=(Note + Channel), "fade"=SoundFade, "sid"=Sid, "expiration"=(realtime() + TotalPlaytime), "length"=TotalPlaytime))
+        
+        local Expires = Duration
+
+        Notes:pushTable(
+                        table(
+                            "speaker"=SpeakerNumber, 
+                            "ncc"=(Note + Channel), 
+                            "sid"=Sid, 
+                            "pitch" = Pitch,
+                            "volume" = Volume,
+                            "channel" = Channel,
+                            "starttime"=realtime(), 
+                            "expiration"=(realtime() + Duration), 
+                            "length"=(Duration + (1 * Channel == 10))
+                            )
+                        )
     }
 
     function void stopNote(Note, Channel)
     {
+        if(Channel == 10)
+        {
+            return    
+        }
+        
         for(I = 1, Notes:count())
         {
             local NData = Notes[I, table]            
             if((Note + Channel) == NData["ncc", number])
             {
-                soundStop(NData["sid", number], NData["fade", number])
-                Notes[I, table]["expiration", number] = realtime() + NData["fade", number] * 1.5
+                local Duration = realtime() - NData["starttime", number]
+ 
+                local Fade = clamp(Duration * max(1 - (Duration - NData["length", number]), 0.25), 0.25, max(Duration, 0.25))
+                
+                if(!PowerSaving)
+                {
+                    zChannel(Channel, 0, 0)
+                }
+                
+                soundStop(NData["sid", number], Fade)
+                Notes[I, table]["expiration", number] = realtime() + Fade + 0.25
                 break   
             } 
         }   
-    }
-
-    function number table:nextNoteOn(CurrentIndex, CurrentTiming)
-    {
-        local Result = 1
-        for(I = CurrentIndex + 1, min(CurrentIndex + 1 + 7, This:count()))
-        {
-            local Event = This[I, table]
-            
-            if(Event["timing", number] > 0.001 & perf(OpsLimit))
-            {
-                break   
-            }
-            
-            Result++   
-        }
-        return Result
     }
 
     function void playMidi()
@@ -617,7 +638,7 @@ if(first())
             IsPlaying  = 1           
             
             Playtime   = Data["header", table]["playtime", number]
-
+            
             local Trks = Data["tracks", table]
             for(I = 1, Trks:count())
             {
@@ -654,16 +675,40 @@ if(first())
                     {
                         local Vol   = Event["volume",   number]
                         local Pitch = Event["pitch",    number]
-                        local Delta = Events[Track:nextNoteOn(Counters[I, number], Timing), table]["timing",    number] - Timing
-        
-                        if(Vol > 0 & Note >= 36 & Note <= 95)
-                        {
-                            playNote(Note, Chan, Event["sound", string], Pitch, Vol, Delta, Event["duration", number])
-                        }
+
+                        playNote(Note, Chan, Event["sound", string], Pitch, Vol, Event["duration", number], Event["udid", number])                        
                     }
                     elseif(Type == "Note Off")
                     {
                         stopNote(Note, Chan)                              
+                    }
+                    elseif(Type == "Pitch Blend")
+                    {                        
+                        local Blend = Event["increase", number]                 
+                        
+                        for(I = 1, Notes:count())
+                        {
+                            local NData = Notes[I, table]      
+                            
+                            if(NData["channel", number] - 1 == Event["channel", number])
+                            {
+                                soundPitch(NData["sid", number], clamp(NData["pitch", number] * (Blend), 1, 255))
+                            }                            
+                        }                        
+                    }
+                    elseif(Type == "Aftertouch")
+                    {
+                        local Pressure = Event["pressure", number]
+                        
+                        for(I = 1, Notes:count())
+                        {
+                            local NData = Notes[I, table]      
+                            
+                            if(NData["channel", number] - 1 == Event["channel", number])
+                            {
+                                soundVolume(NData["sid", number], clamp(NData["volume", number] + Pressure, 0, 1))
+                            }                            
+                        }                           
                     }
 
                     Counters[I, number] = Counters[I, number] + 1                                               
@@ -711,7 +756,7 @@ if(first())
             {
                 local I = HoloC + ChannelC + 1
                 
-                holoCreate(I, entity():toWorld(vec(-0.5,-7.5 + (15 / 15) * ChannelC,3.5)), vec(1,0.085,0.001), entity():toWorld(ang()))
+                holoCreate(I, entity():toWorld(vec(-0.5,-7.5 + (15 / 15) * ChannelC,1.5)), vec(1,0.085,0.001), entity():toWorld(ang())) # z = 3.5
                 holoMaterial(I, "debug/debugdrawflat")
                 holoColor(I, hsv2rgb((360 / 16) * ChannelC, 1, 1))
                 holoParent(I, entity())
@@ -723,7 +768,7 @@ if(first())
             {                
                 local I = HoloC + ChannelC + 1 
 
-                holoCreate(I, entity():toWorld(vec(0,0,3.45)), vec(1,1.4,0.001), entity():toWorld(ang()))
+                holoCreate(I, entity():toWorld(vec(-0.5,0,1.45)), vec(1.1,1.4,0.001), entity():toWorld(ang())) # z = 3.45
                 holoMaterial(I, "debug/debugdrawflat")
                 holoColor(I, vec(40))
                 holoParent(I, entity())
@@ -741,6 +786,10 @@ if(first())
     }
     
     setMode("init")
+}
+elseif(last())
+{
+   # selfDestructAll()   
 }
 
 if(perf(OpsLimit))

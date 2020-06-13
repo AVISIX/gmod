@@ -1,10 +1,10 @@
 @name Midi Library V3
 
 # [ Config ] #
-@persist MidiPerf [PlayablePianoBank VanillaBank]:table
+@persist MidiPerf [PlayablePianoBank VanillaBank]:table 
 
 # [ Parser ] #
-@persist MidiBuffer MidiParsing MidiTempo LastStatus MidiDone MidiInTrack MidiParsingProgress LongestTime MidiTotalSoundsLoaded
+@persist MidiBuffer MidiParsing MidiTempo LastStatus MidiDone MidiInTrack MidiParsingProgress LongestTime MidiTotalSoundsLoaded UdidCounter PrevUid YieldTime
 @persist [MidiResult TempTrack SoundDurationBank]:table
 
 # [ Debug ] #
@@ -195,7 +195,7 @@ if( first() )
         {
             if(P == 57)
             {
-                return "wowozela/samples/skull.wav"   
+               # return "wowozela/samples/skull.wav"   
             }
             
             if(P >= 65 & P <= 68)
@@ -246,17 +246,17 @@ if( first() )
             # Sound Effects
             if(P == 122)
             {
-                return "NPC_PoisonZombie.FastBreath"   
+              #  return "NPC_PoisonZombie.FastBreath"   
             }
             
             if(P == 126)
             {
-                return "NPC_AttackHelicopter.Rotors"   
+              #  return "NPC_AttackHelicopter.Rotors"   
             }
             
             if(P == 128)
             {
-                return "weapons/357/357_fire2.wav"   
+              #  return "weapons/357/357_fire2.wav"   
             }
         }
         
@@ -355,16 +355,19 @@ if( first() )
             return RealNotes[Note, string]
         }
 
-        return ""
+        return "a1"
     }
 
     function void midiLibReset()
     {
+        YieldTime   = 0
         MidiBuffer  = 0
         MidiDone    = 1
         MidiParsing = 0
         MidiTempo   = 120
         LastStatus  = -1
+
+        UdidCounter = 1000
 
         MidiParsingProgress = 0
         MidiDebugImporting  = 0
@@ -466,16 +469,22 @@ if( first() )
         return floor(2 ^ ((Note + 5) / 12), 1)
     }
 
-    function number realtime(Delta, A, B)
+    function number realtime(Delta, Tempo, Division)
     {
-        return (Delta * 60) / (A * B)   
+        return (Delta * 60) / (Tempo * Division)   
     }   
+        
+    function number bend(Msb, Lsb)
+    {
+        local Bend = (Msb << 7) || Lsb
+        return 2 ^ ((((Bend - 8192) / 8192) * 0.5) / 12)
+    }
         
     function table string:decodeMidi(Tempo:number)
     {
         local Result = table()
  
-        while(perf(MidiPerf))
+        while(perf(MidiPerf) & curtime() > YieldTime)
         {       
             if(MidiDone & !MidiParsing)
             {
@@ -510,9 +519,21 @@ if( first() )
 
                 local Division = This:readLength(2):hexToNumber()    
                 
-                if(Division <= 0)
+                if((Division && 0x8000) == 0) 
                 {
-                    Division = 120   
+                    if(Division <= 0)
+                    {
+                        Division = 120   
+                    }
+                }
+                else
+                {
+                    # If the first bit is NOT set, then the division is in "Frames"
+                    
+                    local Frames = abs(Division && 0x7F00)
+                    local Ticks  = (Division && 0x00FF)
+                    
+                    Division = Ticks  # I have no idea if this is correct lol
                 }
 
                 TempTrack                   = table()       
@@ -525,6 +546,7 @@ if( first() )
                 MidiResult["header", table]["playtime", number] = 0
                 MidiResult["tracks", table]                     = table()
                 
+                UdidCounter           = 1000
                 MidiTempo             = Tempo
                 MidiTotalSoundsLoaded = 0
                 LastStatus            = 0
@@ -683,7 +705,8 @@ if( first() )
                                         
                                         if(Sound:sub(Sound:length() - 3, Sound:length()) != ".wav")
                                         {
-                                            Sound = "gmodtower/lobby/instruments/" + Sound + "/" + getPPianoNote(Note) + ".wav"       
+                                            local N = getPPianoNote(Note+1)
+                                            Sound = "gmodtower/lobby/instruments/" + Sound + "/" + (N) + ".wav"       
                                             Pitch = 100   
                                         }
                                          
@@ -694,11 +717,23 @@ if( first() )
                                         }
                                         else
                                         {
-                                            local Dur = min(soundDuration(Sound), 2)
+                                            local Dur = soundDuration(Sound)
+                                
+                                            YieldTime = curtime() + 0.05
+                                
                                             SoundDurationBank[Sound, number] = Dur
                                             Duration = Dur   
                                         }
-                                                                                    
+                                
+                                        if(floor(Duration, 1) < 0.1)
+                                        {
+                                            Duration = 2   
+                                        }            
+
+                                        Duration = max(Duration, 0.15)                                                                     
+                    
+                                        local Udid = round((((Note + 1) * (Channel + 1) * Duration) * Volume) + round(random(1,99999)) * (Pitch / 100)) #abs(round((((randint(1, 99999) - hash(Sound)) * (max(Note, 0.001) * max(Channel, 0.001))) / max(Duration, 0.001)) * ((1 / 255) * max(Pitch, 1))))
+                                        
                                         TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = Type,
                                                                                                                           "note"     = Note,
                                                                                                                           "channel"  = Channel,
@@ -707,7 +742,10 @@ if( first() )
                                                                                                                           "delta"    = Real,
                                                                                                                           "sound"    = Sound,
                                                                                                                           "duration" = Duration,
+                                                                                                                          "udid"     = Udid,
                                                                                                                           "timing"   = TempTrack["meta", table]["playtime", number])
+                                    
+                                        PrevUid = Udid 
                                     }
                                 }                            
                             }
@@ -715,6 +753,21 @@ if( first() )
                             {   
                                 local Param1 = This:readNext()   
                                 local Param2 = This:readNext()
+                                
+                                if(Status == 0xE0)
+                                {  
+                                    local Lsb = Param1
+                                    local Msb = Param2 
+                                    
+                                 ##   local Bend = 2 ^ ((((((Msb << 7) || Lsb) - 8192) / 8192) * 1) / 12) #(Msb << 7) || Lsb
+                                    local Bend = bend(Msb, Lsb) 
+                                 #   Bend = 2 ^ ((((Bend - 8192) / 8192) * 2) / 12)
+ 
+                                    TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = "Pitch Blend",
+                                                                                                                      "increase" = Bend,
+                                                                                                                      "channel"  = Channel,
+                                                                                                                      "timing"   = TempTrack["meta", table]["playtime", number])
+                                }
                             }       
                             elseif(Status == 0xD0 | Status == 0xC0)
                             {
@@ -722,7 +775,12 @@ if( first() )
                                 
                                 if(Status == 0xD0)
                                 {
-                                    #Channel Aftertouch 
+                                    local Pressure = (1 / 128) * (Param + 1)
+                                    
+                                    TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = "Aftertouch",
+                                                                                                                      "pressure" = Pressure,
+                                                                                                                      "channel"  = Channel,
+                                                                                                                      "timing"   = TempTrack["meta", table]["playtime", number])
                                     
                                 }
                                 else
@@ -762,6 +820,7 @@ if( first() )
                     TempTrack = table("meta"=table("playtime"=0),"events"=table())
                 }
                 
+                YieldTime           = 0
                 MidiTempo           = 120
                 MidiParsingProgress = 100
                 MidiDone            = 1
