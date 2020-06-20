@@ -60,7 +60,7 @@ if(first())
     # [ --- Config --- ] #
     E = entity()
 
-    Scale         = 1
+    Scale         = 0.85
 
     FreeVel       = 0.6
     FreeAng       = 0.9
@@ -262,22 +262,24 @@ if(first())
             local Hu = 5 * Scale
             local V5 = vec(Hu)
 
+            local RanPos = NoVec
+
             for(I = 1, RPoints:count())
             {            
                 local Dir   = (This["Slave", entity]:toWorld(RPoints[I, vector] + StepPos) - LPoint)
                 FRan        = rangerOffsetHull(Dir:length(), LPoint, Dir:toAngle():forward(), -V5, V5)            
+                
+                RanPos      = FRan:position()
                 
                 if(FRan:hit() & I > 1)
                 {
                     break
                 }
 
-                LPoint      = FRan:position()
+                LPoint      = RanPos
             }
 
             This["Ranger", ranger] = FRan
-
-            local RanPos = FRan:position()
 
             if(RanPos:distance(This["Animation", vector]) > 1)
             {
@@ -351,7 +353,7 @@ if(first())
         foreach(I, Leg:table = Legs)
         {          
             local Ranp   = Leg["Ranger", ranger]:position()
-            local RanPos = Ranp:cropVector(75) #(Leg["Ranger", ranger]:position() + Leg["Animation", vector]) / 2   
+            local RanPos = Ranp:cropVector(50) #(Leg["Ranger", ranger]:position() + Leg["Animation", vector]) / 2   
             local LPos   = Base:toLocal(RanPos)
 
             local LX = LPos:x()

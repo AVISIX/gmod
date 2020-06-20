@@ -70,10 +70,10 @@ Z = 40
 YY = 40
 XX = 40
 
-SkelAlpha = 50
+SkelAlpha = 0
 TempModelAlpha = 255
 
-holo("base", vec(0,0,-Z), vec(1), ang(), vec(0,0,255), "", 0, 255, "")
+holo("base", vec(0,0,-Z), vec(1), ang(), vec(0,0,255), "", 0, SkelAlpha, "")
 
 
 
