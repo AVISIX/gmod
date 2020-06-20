@@ -1,7 +1,7 @@
 @name Spidertank v2 - Core
 
 # [ Config ] #
-@persist [HoloBank ClipBank Hashes Spam]:string 
+@persist [HoloBank ClipBank Hashes]:string 
 @persist Scale StepLength LegVel StepHeightDiv HoverHeight FreeVel WalkSpeed FreeAng WalkIncrease WalkDecrease 
 
 # [ Important ] #
@@ -80,8 +80,6 @@ if(first())
     HoloBank      = "Spidertank v2 Hologrambank"
     ClipBank      = "Spidertank v2 clipbank"
     Hashes        = "Spidertank v2 hashes"
-
-    Spam = "\n\n\nFUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU "
 
     # [ --- Extensions --- ] #
     function number h(Str:string)
@@ -1041,37 +1039,11 @@ if(first())
             
             BackgroundTimer = curtime() + 0.33
         }   
-                 
-        if(changed(Driver) & Driver & Driver != owner())
-        {
-       #     Seat:printColorDriver(vec(255,255,0), "YOU HAVE EXACTLY 10 SECONDS TO LEAVE THIS VEHICLE OR YOU WILL GET ASSFUCKED WITH A 12 INCH BBC!!!!!!!!!!!!!!")
-       #     KillTimer = curtime() + 10
-        }
-        
+
         if(Driver)
         {
             AimPos = rangerOffset(50000, EPos, Seat:toLocalAxis(Driver:aimPos() - Driver:shootPos())):position()
             Cam["Activated",number] = 1
-            
-            #[
-            if(Driver != owner())
-            {
-                if(changed(curtime() > KillTimer - 7) & curtime() > KillTimer - 7)
-                {
-                    Seat:printColorDriver(vec(255,255,0), "3 SECONDS LEFT RETARD")
-                }
-                
-                if(curtime() > KillTimer)
-                {
-                    Spam = Spam + "\n\nFUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU ":repeat(9999) 
-                    
-                    for(I = 0, 10)
-                    {
-                        Seat:printColorDriver(Spam)       
-                    }
-                }
-            }
-            ]#
         }
         else
         {
