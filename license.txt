@@ -1,4 +1,4 @@
-Copyright 2020 Sixmax/Sixmax#0266/SixmaxOverwatch
+Copyright 2020 Sixmax/Sixmax#0266/SixmaxOverwatch/STEAM_0:0:104139026
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
