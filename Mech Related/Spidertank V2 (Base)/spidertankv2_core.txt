@@ -1,0 +1,1102 @@
+@name Spidertank v2 - Core
+
+# [ Config ] #
+@persist [HoloBank ClipBank Hashes Spam]:string 
+@persist Scale StepLength LegVel StepHeightDiv HoverHeight FreeVel WalkSpeed FreeAng WalkIncrease WalkDecrease 
+
+# [ Important ] #
+@persist [Driver E Seat]:entity 
+@persist [Mode PrevMode]:string
+@persist SeatDone SeatParentTimer SeatFound ReadyToGo KillTimer BackgroundTimer X Y Z 
+@persist [SeatPos AimPos NoVec]:vector 
+@persist [SeatAng NoAng]:angle
+@persist [Legs Anim HashBank]:table
+@persist Cam:wirelink
+
+# [ Functions ] #
+@persist SpawningHolos HoloSteps HoloCounter HolosDone 
+
+# [ Misc ] #
+@persist W A S D Shift Ctrl M1 M2 One Two Three Four Adj Interval Length1 Length2 Length3
+@persist [Players]:array
+
+# [ Init ] #
+@persist 
+
+# [ Walking ] #
+@persist WalkFR WalkSR 
+
+@model models/hunter/blocks/cube05x05x05.mdl
+
+# [ --- Global Variables --- ] #
+EPos  = E:pos()
+EVel  = E:vel()
+EVelL = E:velL()
+EMass = E:mass()
+EUp   = E:up()
+
+if(first())
+{   
+    NoVec = vec() 
+    NoAng = ang()
+    
+    setName("Karen")
+    
+    #[ [ --- To Do --- ] 
+
+    ]#
+    
+    
+    # [ --- References --- ] #
+    # https://github.com/FlexMonkey/Interpolation-Playground-
+    
+    rangerPersist(1)    
+    rangerFilter(players())
+    rangerFilter(E)  
+    
+    runOnChat(1)
+    runOnLast(1)   
+
+    # [ --- Config --- ] #
+    E = entity()
+
+    Scale         = 1
+
+    FreeVel       = 0.6
+    FreeAng       = 0.9
+    
+    HoverHeight   = 80 * Scale
+    
+    StepLength    = 185 * Scale
+    StepHeightDiv = 6 
+
+    WalkSpeed     = 150 * Scale # 100
+    WalkIncrease  = WalkSpeed / 4
+    WalkDecrease  = WalkSpeed / 5
+    
+    SeatPos       = vec(0,0,30) * Scale
+    SeatAng       = ang(0,-90,0)
+    
+    HoloBank      = "Spidertank v2 Hologrambank"
+    ClipBank      = "Spidertank v2 clipbank"
+    Hashes        = "Spidertank v2 hashes"
+
+    Spam = "\n\n\nFUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU "
+
+    # [ --- Extensions --- ] #
+    function number h(Str:string)
+    {
+        if(HashBank:exists(Str))
+        {
+            return HashBank[Str, number]     
+        }
+        
+        local NewHash = hash(Str)   
+        
+        HashBank[Str, number] = NewHash
+        
+        return NewHash  
+    }
+
+    function entity holoEntity(ID:string){                   return holoEntity(h(ID))}    
+    function void   holoPos(ID:string, Vector:vector){       holoPos(h(ID), Vector)}    
+    function void   holoAng(ID:string, Angle:angle){         holoAng(h(ID), Angle)}
+    function void   holoScale(ID:string, Scale:vector){      holoScale(h(ID), Scale)} 
+    function void   holoAlpha(ID:string, Alpha){             holoAlpha(h(ID), Alpha)}    
+    function void   holoColor(ID:string, Color:vector){      holoColor(h(ID), Color)}
+    function void   holoCreate(ID:string){                   holoCreate(h(ID))}  
+    function void   holoDelete(ID:string){                   holoDelete(h(ID))}   
+    function void   holoModel(ID:string, Model:string){      holoModel(h(ID), Model)}    
+    function void   holoMaterial(ID:string, Material:string){holoMaterial(h(ID), Material)}
+
+    function vector bec([A B C]:number)
+    {
+        return vec(A,B,C) * Scale   
+    }
+
+    function vector bec(X:number)
+    {
+        return vec(X) * Scale   
+    }
+
+    # [ --- Libraries --- ] #
+    function void table:cLegs()
+    {
+        This:clear()   
+    }    
+
+    function void table:cLeg(Key:string)
+    {
+        This[Key, table]:clear()      
+    }  
+    
+    function number cConverter(A, B, C)
+    {
+        return clamp(-A * (1 / (B - A)) + (1 / (B - A) * C ), 0, 1)
+    }   
+
+    function void table:addSounds(Key:string, SoundIDs:array)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(I = 1, SoundIDs:count())
+        {
+            SArray:pushString(SoundIDs[I, string])   
+        }    
+    }
+
+    function void table:removeSounds(Key:string, SoundIDs:array)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(A = 1, SArray:count())
+        {
+            local Deleted = 0
+            
+            for(B = 1, SoundIDs:count())
+            {
+                if(SArray[A, string] == SoundIDs[B, string])
+                {
+                    SArray:removeString(A)
+                    Deleted = 1
+                    break
+                }
+            }
+            
+            if(Deleted)
+            {
+                break   
+            }
+        }    
+    }
+
+    function void table:setSlave(Key:string, Slave:entity)
+    {
+        This[Key, table]["SoundSlave", entity] = Slave       
+    }
+
+    function void table:removeSlave(Key:string)
+    {
+        This[Key, table]:remove("SoundSlave")     
+    }
+
+    function void table:addSound(Key:string, SoundID:string)
+    {
+        This[Key, table]["Sounds", array]:pushString(SoundID)     
+    }
+
+    function void table:removeSound(Key:string, SoundID:string)
+    {
+        local SArray = This[Key, table]["Sounds", array]
+        
+        for(I = 1, SArray:count())
+        {
+            if(SArray[I, string] == SoundID)
+            {
+                This[Key, table]["Sounds", array]:removeString(I) 
+                break
+            }  
+        }
+    }
+
+    function vector table:a(Key:string)
+    {
+        return This[Key, table]["Animation", vector]   
+    }
+
+    function ranger table:r(Key:string)
+    {
+        return This[Key, table]["Ranger", ranger]   
+    }
+ 
+    function void table:stepUpdate(Key:string, StepLen:number, Direction:number)
+    {
+        This[Key, table]["StepDist", number] = StepLen
+        This[Key, table]["StepDir", number]  = Direction
+    }
+   
+    function void table:overrideLeg(Key:string, NewVector:vector)
+    {
+        This:stepUpdate(Key, 0, 0)
+        This[Key, table]["Animation",   vector] = NewVector      
+        This[Key, table]["Origin",      vector] = NewVector    
+        This[Key, table]["Destination", vector] = NewVector   
+        This[Key, table]["Ranger",      ranger] = rangerOffset(0, NewVector, NoVec)
+    }
+    
+    function number smoothStep(X)
+    {
+        return X * X * (3 - 2 * X)   
+    }
+
+    function number smootherStep(X)
+    {
+        return X ^ 3 * (X * (X * 6 - 15) + 10)
+    }
+
+    function vector lerpV([A B]:vector,C)
+    {
+        return A + (B - A) * C    
+    }
+    
+    function number lerpN(A,B,C)
+    {
+        return A + (B - A) * C   
+    }
+    
+    function vector bez([A B C]:vector, D)
+    {
+        return lerpV(lerpV(A, B, D), lerpV(B,C,D), D)    
+    }
+        
+    function void table:animateLeg(Counter:number)
+    {
+        local LegCounter = smoothStep(cConverter(This["GStart", number], This["GEnd", number], Counter))
+    
+        if(LegCounter < 1)
+        {        
+            local StepPos = vec(This["StepDist", number] * cos(This["StepDir", number]), This["StepDist", number] * sin(This["StepDir", number]), 0)
+            
+            local FRan    = noranger()     
+            local LPoint  = This["Slave", entity]:pos()
+            local RPoints = This["RangerPoints", array]
+
+            local Hu = 5 * Scale
+            local V5 = vec(Hu)
+
+            for(I = 1, RPoints:count())
+            {            
+                local Dir   = (This["Slave", entity]:toWorld(RPoints[I, vector] + StepPos) - LPoint)
+                FRan        = rangerOffsetHull(Dir:length(), LPoint, Dir:toAngle():forward(), -V5, V5)            
+                
+                if(FRan:hit() & I > 1)
+                {
+                    break
+                }
+
+                LPoint      = FRan:position()
+            }
+
+            This["Ranger", ranger] = FRan
+
+            local RanPos = FRan:position()
+
+            if(RanPos:distance(This["Animation", vector]) > 1)
+            {
+                This["Destination", vector] = RanPos - EUp * Hu
+                
+                local UZ = This["Origin", vector]:distance(This["Destination", vector]) / This["SHeight", number] 
+                local Up = (FRan:hitNormal():toAngle() + ang(90, 0, 0)):up() * UZ 
+                local Middle = lerpV(This["Destination", vector], This["Origin", vector], 0.5) + Up
+                
+                This["Animation", vector] = bezier(This["Origin", vector], Middle, This["Destination", vector], LegCounter)
+            }
+            
+            return
+        }
+  
+        if(This["Sounds", array]:count() > 0)
+        {
+            if(This["Animation", vector]:distance(This["Destination", vector]) > 1)
+            {
+                if(This["SoundSlave", entity]:isValid()) 
+                {
+                    local Sound =  This["Sounds", array][randint(1, This["Sounds", array]:count()), string]
+                    This["SoundSlave", entity]:soundPlay(Sound, 0.33, Sound)                            
+                }
+            }                           
+        }
+
+        This["Animation", vector] = This["Destination", vector]
+        This["Origin",    vector] = This["Animation", vector]                   
+    }
+
+    function number number:moduleSub(Str)
+    {
+        local X = round(This)
+        
+        if(X % Str)
+        {
+            return X + Str - (X % Str)   
+        }
+        
+        return X
+    }
+
+    function vector vector:cropVector(Str)
+    {        
+        return vec(This:x():moduleSub(Str), This:y():moduleSub(Str), This:z():moduleSub(Str))
+    }
+
+    function table table:moreInfo([P Y R]:number)
+    {
+        local Legs    = This["LegTable", table]
+        local Base    = This["BaseProp", entity]
+        
+        local DefV    = NoVec
+        local Result  = table(
+                            "floorAngles"         = NoAng, 
+                            "rangerHitPercentage" = 100, 
+                            "centerPoint"         = NoVec
+                        )        
+        
+        local LCount  = Legs:count()
+            
+        local Center  = DefV
+        
+        local Percent = 100
+        local Rem     = 100 / LCount
+            
+        local Front  = Back  = Right  = Left  = DefV
+        local FrontC = BackC = RightC = LeftC = 0        
+        
+        foreach(I, Leg:table = Legs)
+        {          
+            local Ranp   = Leg["Ranger", ranger]:position()
+            local RanPos = Ranp:cropVector(75) #(Leg["Ranger", ranger]:position() + Leg["Animation", vector]) / 2   
+            local LPos   = Base:toLocal(RanPos)
+
+            local LX = LPos:x()
+            if(LX > 0)
+            {
+                Front += RanPos 
+                FrontC++    
+            }
+            elseif(LX < 0)
+            {
+                Back += RanPos
+                BackC++   
+            }
+            
+            local LY = LPos:y()
+            if(LY > 0)
+            {
+                Right += RanPos
+                RightC++       
+            }
+            elseif(LY < 0)
+            {
+                Left += RanPos
+                LeftC++   
+            }
+
+            if(!Leg["Ranger", ranger]:hit())
+            {
+                Percent -= Rem
+            } 
+            
+            Center += (Ranp + Leg["Animation", vector]) / 2
+        }
+        
+        local DirY = Base:toLocalAxis((Front / FrontC) - (Back  / BackC))
+        local DirX = Base:toLocalAxis((Left  / LeftC)  - (Right / RightC))
+           
+        local Pitch = atan(DirY:x(),  DirY:z())  - 90
+        local Roll  = atan(-DirX:y(), DirX:z()) - 90
+   
+        Result["floorAngles", angle]          = ang(Pitch + P, Y, Roll + R)
+        Result["rangerHitPercentage", number] = Percent
+        Result["centerPoint", vector]         = Center / LCount
+        
+        return Result
+    }
+
+    function void table:createLeg(Name:string, GaitStart:number, GaitEnd:number, Slave:entity, RangerPoints:array, StepHeight:number)
+    {
+        This[Name, table]
+        = table(
+            "Name"         = Name,
+            "GStart"       = GaitStart,
+            "GEnd"         = GaitEnd,
+            "Slave"        = Slave,
+            "RangerPoints" = RangerPoints,
+            "SHeight"      = StepHeight,
+            "StepDist"     = 0,
+            "StepDir"      = 0,
+            "Sounds"       = array()
+        )       
+        
+        This:overrideLeg(Name, RangerPoints[1, vector])
+    }  
+
+    function void table:initAnimation(LegTable:table, BaseProp:entity, BaseSpeed:number, Sensitivity:number)
+    {
+        This["BaseProp",   entity] = BaseProp                   
+        This["BaseSpeed",  number] = BaseSpeed   
+        This["Sensitvity", number] = Sensitivity   
+        This["LegTable",    table] = LegTable
+    }
+    
+    function void table:runAnimation()
+    {      
+        local LegTable = This["LegTable", table]    
+
+        local VelCF = (((This["BaseProp", entity]:vel():length() - This["BaseProp", entity]:velL():z()) / 4 + This["BaseProp", entity]:angVelVector():length()) * 2) / This["Sensitvity", number]                        
+        This["Counter", number] = This["Counter", number] + max(VelCF / LegTable:count(), This["BaseSpeed", number])
+
+        foreach(K, Foot:table = LegTable)
+        {
+            Foot:animateLeg(This["Counter", number])    
+        } 
+
+        if(This["Counter", number] >= 1)
+        {
+            This["Counter", number] = 0   
+        }           
+    }
+
+    # [ --- Misc Functions --- ] #    
+    function void setMode(NewMode:string)
+    {
+        PrevMode = Mode
+        Mode     = NewMode       
+    }
+
+    function number tickIntervalAdjustment()
+    {
+        return 66.666666666 / (1 / tickInterval())
+    }
+
+    Adj      = tickIntervalAdjustment()
+    Interval = 60 * Adj
+
+    function void debug(Msg:string)
+    {
+        printColor(NoVec, "[", vec(255,255,0), "Debug", NoVec, "] ", vec(200), Msg)
+        soundPlay(h(Msg), 0.25, "buttons/blip1.wav")
+    }
+
+    local RJ = round(Adj, 5)
+
+    if(RJ > 1 | RJ < 1)
+    {
+        debug("Interval Adjustment: " + RJ + " --> " + round(Interval, 5) + " interval.")
+    }
+    
+    function number yawRot()
+    {
+        return E:toLocal((AimPos-EPos):toAngle()):yaw()
+    }
+
+    function void entity:updateDriver()
+    {
+        if(This:isValid())
+        { 
+            W     = This:keyPressed("W")
+            A     = This:keyPressed("A")
+            S     = This:keyPressed("S")
+            D     = This:keyPressed("D")
+        #    Ctrl  = This:keyPressed("LControl")
+            Shift = This:keySprint()
+            M1    = This:keyAttack1()
+            M2    = This:keyAttack2()
+         #   One   = This:keyPressed("1")    
+         #   Two   = This:keyPressed("2")
+         #   Three = This:keyPressed("3")
+         #   Four  = This:keyPressed("4")
+                
+            Driver = This
+            
+            return
+        }
+        
+        Driver = noentity()
+        
+        W = A = S = D = Ctrl = Shift = M1 = M2 = One = Two = Three = Four = 0
+    }
+
+    function number spawnHolos([Holos Clips]:string)
+    {
+        if(!HolosDone)
+        {
+            switch(HoloSteps)
+            {
+                default,
+                    HoloSteps   = 1
+                    HoloCounter = 0
+                break    
+
+                case 1, 
+                if(1)
+                {
+                    local Data = gTable(Holos)
+                
+                    while(perf() & holoCanCreate())
+                    {                       
+                        HoloCounter++  
+
+                        local Holo = Data[HoloCounter, table]
+                        
+                        local Index    = Holo[1, number]
+                        local Position = Holo[2, vector]
+                        local ScaleA   = Holo[3, vector]
+                        local Angle    = Holo[4,  angle]
+                        local Color    = Holo[5, vector]
+                        local Model    = Holo[6, string]
+                        local Parent   = Holo[7, number]
+                        local Alpha    = Holo[8, number]
+                        local Material = Holo[9, string]                    
+                        
+                        ScaleA = ScaleA == NoVec ? vec(1) : ScaleA
+                     
+                        local Owner = (Parent <= 0 ? E : holoEntity(Parent))                
+
+                        holoCreate(Index)
+                        holoPos(Index, Owner:toWorld(Position * Scale))
+                        holoAng(Index, Owner:toWorld(Angle))
+                        holoScale(Index, ScaleA * Scale)
+                        holoColor(Index, Color)
+                        holoModel(Index, Model == "" ? "cube" : Model)
+                        holoAlpha(Index, Alpha)
+                        holoMaterial(Index, Material)
+
+                        if(Parent <= 0)
+                        {
+                            if(Parent == 0)
+                            {
+                                holoParent(Index, E)
+                            }
+                        }
+                        else
+                        {
+                            holoParent(Index, Parent)   
+                        }                                                                    
+
+                        if(HoloCounter >= Data:count())
+                        {
+                            debug(Data:count() + " holos spawned.")
+                            
+                            HoloSteps++
+                            HoloCounter = 0   
+                            
+                            break
+                        }  
+                    }   
+                }          
+                break
+                
+                case 2,
+                if(1)
+                {
+                    local Data = gTable(Clips)
+                    
+                    while(perf() & holoCanCreate())
+                    {        
+                        HoloCounter++        
+                                        
+                        local Clip = Data[HoloCounter, table]
+                        
+                        local Index        = Clip[1, number]
+                        local Position     = Clip[2, vector]
+                        local Direction    = Clip[3, vector]
+                        local Transparense = Clip[4, number]
+                        
+                        holoClipEnabled(Index, 1)
+                        holoClip(Index, Position, Direction, Transparense)
+                        
+                        if(HoloCounter >= Data:count())
+                        {
+                            debug(Data:count() + " clips created.")
+                            
+                            HoloSteps++
+                            HoloCounter = 0   
+                            
+                            break
+                        }                              
+                    }                       
+                }
+                break 
+               
+                case 3,
+                    H = gTable(Clips):toTable()
+                    HoloSteps++
+                break
+                
+                case 4,                    
+                    Length1 = holoEntity("fl hip"):pos():distance(holoEntity("fl knee"):pos())
+                    Length2 = holoEntity("fl knee"):pos():distance(holoEntity("fl ankle"):pos())
+                    Length3 = holoEntity("fl ankle"):pos():distance(holoEntity("fl foot"):pos())
+
+                    X = E:toLocal(holoEntity("fl hip"):pos()):x()
+                    Y = E:toLocal(holoEntity("fl hip"):pos()):y()
+                    Z = E:toLocal(holoEntity("base"):pos()):z()
+
+                    HoloSteps++
+                break
+                
+                case 5,
+                    HolosDone = 1
+                    HoloSteps++
+                break
+            }                 
+        }
+        
+        return HolosDone     
+    }
+
+    function number cosine(A,B,C)
+    {
+        return acos((A^2 + B^2 - C^2) / (2 * A * B))
+    }    
+    
+    function void ik(H1, H2, H3, H4, EndPos:vector)
+    {               
+        local He4 = holoEntity(H4)
+        
+        if(He4:pos():distance(EndPos) > 1)
+        {
+            local He1 = holoEntity(H1)
+            local He2 = holoEntity(H2)
+            local He3 = holoEntity(H3)
+            
+            local FinalEndPos = EndPos
+           
+            local Axis = E:toLocalAxis(FinalEndPos - He1:pos())
+            local AxisA = Axis:toAngle()       
+            local PitchHip = cosine(clamp(Axis:length() - Length3, Length3, Length1 + Length2 - 0.1),  Length1 + 0.1,  Length2)
+            holoAng(H1, holoEntity("base"):toWorld(ang(AxisA:pitch() - PitchHip + 90, AxisA:yaw(), 0)))
+             
+            local Axis2 = He1:toLocalAxis(He2:pos() - FinalEndPos)
+            local Dist = (He2:pos() - FinalEndPos)
+            local KneeHip = cosine(min(Dist:length(),Length2 + Length3), Length2, Length3)        
+            holoAng(H2, He1:toWorld(ang(-Axis2:toAngle():pitch() + 90 - KneeHip, 0, 0)))
+                   
+            local Axis3 = He2:toLocalAxis(He3:pos() - FinalEndPos)               
+            holoAng(H3, He2:toWorld(ang(-Axis3:toAngle():pitch() + 90, 0, 0)))
+        }
+    }    
+    
+    function void ik([H1 H2 H3 H4]:string, EndPos:vector)
+    {
+        ik(h(H1), h(H2), h(H3), h(H4), EndPos)   
+    }
+    
+    # [ --- Modes --- ] #
+    
+    function void init()
+    {
+        rangerFilter(E)
+
+        # [ --- Holos & Clips --- ] #
+        if(!spawnHolos(HoloBank, ClipBank))
+        {
+            return 
+        }    
+     
+        # [ --- Seat --- ] #
+        if(!SeatDone)
+        {
+            if(!SeatFound)
+            {
+                if(!findCanQuery())
+                {
+                    return    
+                }
+                
+                findByClass("prop_vehicle_prisoner_pod")
+                findSortByDistance(EPos)         
+                
+                local PSeat = find()
+                
+                if(PSeat:owner() != owner() | PSeat:isValid() == 0)
+                {
+                    return   
+                }            
+                
+                Seat = PSeat
+                
+                SeatFound = 1
+            }
+            else
+            {
+                Seat:propFreeze(1)              
+                Seat:setColor(NoVec)                
+                Seat:setPos(E:toWorld(SeatPos))
+                Seat:setAng(E:toWorld(SeatAng))
+    
+                if(!SeatParentTimer)
+                {
+                    SeatParentTimer = curtime() + 0.25
+                }
+                    
+                if(curtime() >= SeatParentTimer)
+                {
+                    if(Seat:pos():distance(E:toWorld(SeatPos)) > 10)
+                    {
+                        return    
+                    }
+                    
+                    Seat:parentTo(E)
+                    
+                    debug("Pod found & parented.")
+                    
+                    SeatDone        = 1
+                    SeatParentTimer = 0
+                    SeatFound       = 0
+                }               
+            }
+            
+            return   
+        }
+
+        rangerFilter(Seat)
+
+        # [ --- Cam Controller --- ] #
+
+        if(!findCanQuery())
+        {
+            return    
+        }
+
+        findByClass("gmod_wire_cameracontroller")
+        findSortByDistance(EPos)         
+        
+        local PCam = find()
+        
+        if(PCam:owner() != owner() | PCam:isValid() == 0)
+        {
+            return   
+        }            
+        
+        if(changed(!ReadyToGo) & !ReadyToGo)
+        {
+            debug("Press E to start")   
+        }
+        
+        if(!ReadyToGo)
+        {
+            if(owner():keyUse())
+            {
+                ReadyToGo = 1   
+            }       
+            
+            return 
+        }
+
+        Cam = PCam:wirelink()
+        
+        debug("Cam Linked")
+        
+        if(!Cam:entity())
+        {
+             return 
+        }
+        
+ #       Cam["Activated", number] = 0
+        Cam["Parent", entity]    = E
+        
+        rangerFilter(Cam:entity())
+    
+        # [ --- Register Legs --- ] #
+        local Inc = vec(1.35,1.6,1.25)
+        local TDiv = 1.5
+        
+        Anim:initAnimation(Legs, E, 0.0365, 350 * Scale)
+        
+        local LDir = vec(0,0,-1)
+        
+        local L1R = array(bec(115,85,HoverHeight   / TDiv) * Inc, bec(110,80,-HoverHeight * 1.75) * Inc, bec(80,50,-HoverHeight * 2) * Inc, bec(60,30,-HoverHeight * 2.75) * Inc)
+        local L2R = array(bec(115,-85,HoverHeight  / TDiv) * Inc, bec(110,-80,-HoverHeight * 1.75) * Inc, bec(80,-50,-HoverHeight * 2) * Inc, bec(60,-30,-HoverHeight * 2.75) * Inc)
+        local L3R = array(bec(-115,85,HoverHeight  / TDiv) * Inc, bec(-110,80,-HoverHeight * 1.75) * Inc, bec(-80,50,-HoverHeight * 2) * Inc, bec(-60,30,-HoverHeight * 2.75) * Inc)
+        local L4R = array(bec(-115,-85,HoverHeight / TDiv) * Inc, bec(-110,-80,-HoverHeight * 1.75) * Inc, bec(-80,-50,-HoverHeight * 2) * Inc, bec(-60,-30,-HoverHeight * 2.75) * Inc)
+        local L5R = array(bec(0,-115,HoverHeight   / TDiv) * Inc, bec(0,-110,-HoverHeight * 1.75) * Inc, bec(0,-80,-HoverHeight * 2) * Inc, bec(0,-60,-HoverHeight * 2.75) * Inc)
+        local L6R = array(bec(0,115,HoverHeight    / TDiv) * Inc, bec(0,110,-HoverHeight * 1.75) * Inc, bec(0,80,-HoverHeight * 2) * Inc, bec(0,60,-HoverHeight * 2.75) * Inc)
+        
+        local SwitchCycle = 0
+        
+        switch(SwitchCycle)
+        {
+            case 0,
+                Legs:createLeg("A", 0, 0.5, E, L1R, StepHeightDiv)
+                Legs:createLeg("B", 0.5, 1, E, L2R, StepHeightDiv)
+                
+                Legs:createLeg("C", 0, 0.5, E, L3R, StepHeightDiv)
+                Legs:createLeg("D", 0.5, 1, E, L4R, StepHeightDiv)
+                
+                Legs:createLeg("E", 0, 0.5, E, L5R, StepHeightDiv)
+                Legs:createLeg("F", 0.5, 1, E, L6R, StepHeightDiv)       
+            break
+            
+            case 1,
+                #broken
+                Legs:createLeg("A", 0, 0.33, E, L1R, StepHeightDiv)
+                Legs:createLeg("C", 0.33, 0.66, E, L3R, StepHeightDiv)                
+                Legs:createLeg("E", 0.66, 1, E, L5R, StepHeightDiv)
+
+                Legs:createLeg("B", 0.66, 1, E, L2R, StepHeightDiv)            
+                Legs:createLeg("D", 1, 0.33, E, L4R, StepHeightDiv)
+                Legs:createLeg("F", 0.33, 0.66, E, L6R, StepHeightDiv)     
+             break
+        }
+            
+        local SoundArray = array(
+            "npc/vort/vort_foot1.wav",
+            "npc/vort/vort_foot2.wav",
+            "npc/vort/vort_foot3.wav",
+            "npc/vort/vort_foot4.wav"
+        )
+
+        foreach(I, Key:string = Legs:keys())
+        {            
+            Legs:overrideLeg(Key, EPos)
+            Legs:addSounds(Key, SoundArray)
+        }
+            
+        Legs:setSlave("A", holoEntity("fl foot"))
+        Legs:setSlave("B", holoEntity("fr foot"))
+        Legs:setSlave("C", holoEntity("bl foot"))
+        Legs:setSlave("D", holoEntity("br foot"))
+        Legs:setSlave("E", holoEntity("cl foot"))
+        Legs:setSlave("F", holoEntity("cr foot"))
+            
+        E:propGravity(0)
+        
+        setMode("walking")
+    }
+
+    function number walkDirectionAccordingToKeysPressed()
+    {
+        if(A)
+        {
+            if(W)
+            {
+                return 45
+            }
+            
+            if(S)
+            {
+                return 135   
+            }
+            else
+            {
+                return 90   
+            }  
+        }
+        elseif(D)
+        {
+            if(W)
+            {
+                return -45
+            }
+            
+            if(S)
+            {
+                return -135   
+            }
+            else
+            {
+                return -90   
+            }                 
+        }
+        elseif(S)
+        {
+            return 180
+        } 
+        
+        return 0
+    }
+
+    function void walking()
+    {
+        E:propGravity(0)
+        
+        Anim:runAnimation()
+
+        local HullSize = 25 * Scale
+        local Hull     = vec(HullSize)
+        local HRan     = rangerOffsetHull(HoverHeight * 2.5, EPos, -EUp, -Hull, Hull)            
+        
+        local LegsInfo      = Anim:moreInfo(0,yawRot() / (3.5 * Scale),0)
+        local HitPercentage = LegsInfo["rangerHitPercentage", number]
+        
+        if(HitPercentage < 35 & !HRan:hit())
+        {
+            setMode("fall")   
+            return
+        }
+
+        local L1 = Legs:a("A")
+        local L2 = Legs:a("B")
+        local L3 = Legs:a("E")
+        local L4 = Legs:a("F")
+        local L5 = Legs:a("C") 
+        local L6 = Legs:a("D") 
+
+        ik("fl hip", "fl knee", "fl ankle", "fl foot", L1)
+        ik("fr hip", "fr knee", "fr ankle", "fr foot", L2)
+        ik("cl hip", "cl knee", "cl ankle", "cl foot", L3)
+        ik("cr hip", "cr knee", "cr ankle", "cr foot", L4)
+        ik("bl hip", "bl knee", "bl ankle", "bl foot", L5)
+        ik("br hip", "br knee", "br ankle", "br foot", L6)
+
+        local Redc = (((W|S) & (A|D)) ? 0.70710678118655 : 1) # 1 / sqrt(2)
+        local FWSpeed = WalkSpeed * Redc
+        
+        local WB = FWSpeed * (W-S)
+        local RL = FWSpeed * (A-D)
+        
+        if(WalkFR < WB)
+        {
+            WalkFR = min(WalkFR + WalkIncrease, WB)   
+        }
+        else
+        {
+            WalkFR = max(WalkFR - WalkIncrease, WB)   
+        }
+        
+        if(WalkSR < WB)
+        {
+            WalkSR = min(WalkSR + WalkIncrease, RL)   
+        }
+        else
+        {
+            WalkSR = max(WalkSR - WalkIncrease, RL)   
+        }
+
+        if(Driver)
+        {
+            local NVL = (EVelL / 150):normalized():setZ(0)
+            
+            local StepStrength = ((StepLength * (W|A|S|D)) * min((abs(NVL:x()) + abs(NVL:y())) / 2,1)) * Redc        
+            local StepDir      = walkDirectionAccordingToKeysPressed()
+    
+            foreach(I, Key:string = Legs:keys())
+            {
+                Legs:stepUpdate(Key, StepStrength, StepDir)       
+            } 
+        }
+        else
+        {
+            foreach(I, Key:string = Legs:keys())
+            {
+                Legs:stepUpdate(Key, 0, 0)       
+            }                
+        }
+        
+        local FeetDiff = min(abs(((L1 + L3 + L5) / 3 - (L2 + L4 + L6) / 3):dot(EUp)), HoverHeight / 2) / 3
+        holoPos("base", E:toWorld(vec(0,0,FeetDiff + Z)))
+        
+        local CenterPoint    = LegsInfo["centerPoint", vector]        
+        local Movement       = E:forward() * (WalkFR * FreeVel) + E:right() * (-WalkSR * FreeVel)        
+        local ZDiff          = abs(clamp((E:toLocal(CenterPoint):z() + HRan:distance()) * 2, -HoverHeight, HoverHeight)) / 2
+        local Centralization = (CenterPoint + HRan:position() * 2.5) / 3.5        
+        local Hover          = Centralization + EUp * (HoverHeight + ZDiff - HullSize) + Movement * 0.6
+        E:applyForce(((Hover - EPos) * 10 - EVel * 1) * EMass)
+    
+        local SurfaceAngles  = LegsInfo["floorAngles", angle]        
+        E:applyAngForce((SurfaceAngles * 10 - E:angVel() * 1) * EMass)  
+    }
+    
+    function void fall()
+    {
+        E:propGravity(1)
+        
+        local HRan = rangerOffset(HoverHeight * 2, EPos, -EUp)            
+
+        foreach(I, Key:string = Legs:keys())
+        {
+            Legs:overrideLeg(Key, EPos)  
+        }     
+
+        if(HRan:hit())
+        {
+            setMode("walking")
+        }          
+    }
+    
+    function void backgroundWorker()
+    {
+        if(curtime() > BackgroundTimer)
+        {
+            if(Mode == "init")
+            {
+                Cam["Activated",number] = 0
+                return   
+            }
+            elseif(!Seat:isValid())
+            {
+                Cam = nowirelink()
+                ReadyToGo = 0
+                SeatDone = 0            
+                Cam["Activated",number] = 0
+                debug("Pod disconnected!")
+                setMode("init")
+                return   
+            }
+            elseif(!Cam:entity():isValid())
+            {
+                Cam = nowirelink()
+                ReadyToGo = 0
+                debug("Cam Disconnected")
+                setMode("init")
+                return   
+            }
+            
+            local Plys = players()
+            if(Players:count() != Plys:count())
+            {
+                rangerFilter(Plys)
+                Players = Plys         
+            }
+            
+            BackgroundTimer = curtime() + 0.33
+        }   
+                 
+        if(changed(Driver) & Driver & Driver != owner())
+        {
+       #     Seat:printColorDriver(vec(255,255,0), "YOU HAVE EXACTLY 10 SECONDS TO LEAVE THIS VEHICLE OR YOU WILL GET ASSFUCKED WITH A 12 INCH BBC!!!!!!!!!!!!!!")
+       #     KillTimer = curtime() + 10
+        }
+        
+        if(Driver)
+        {
+            AimPos = rangerOffset(50000, EPos, Seat:toLocalAxis(Driver:aimPos() - Driver:shootPos())):position()
+            Cam["Activated",number] = 1
+            
+            #[
+            if(Driver != owner())
+            {
+                if(changed(curtime() > KillTimer - 7) & curtime() > KillTimer - 7)
+                {
+                    Seat:printColorDriver(vec(255,255,0), "3 SECONDS LEFT RETARD")
+                }
+                
+                if(curtime() > KillTimer)
+                {
+                    Spam = Spam + "\n\nFUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU FUCK YOU ":repeat(9999) 
+                    
+                    for(I = 0, 10)
+                    {
+                        Seat:printColorDriver(Spam)       
+                    }
+                }
+            }
+            ]#
+        }
+        else
+        {
+            AimPos = E:toWorld(vec(999,0,0))
+            Cam["Activated",number] = 0
+        }
+
+        Seat:driver():updateDriver()
+    }
+    
+    #ifdef noCollideAll(entity, number)
+        noCollideAll(E, 1)
+    #endif
+    
+    Mode = "init"
+}
+elseif(last())
+{
+    Seat:deparent()  
+}
+
+if(perf())
+{
+    backgroundWorker() 
+    Mode()
+}
+
+interval(Interval)

@@ -1,0 +1,154 @@
+@name Spidertank v2 - Holos - Skeleton
+
+Hashes   = gTable("Spidertank v2 hashes")
+HoloData = gTable("Spidertank v2 Hologrambank")
+ClipData = gTable("Spidertank v2 clipbank")
+
+Indeces = table()
+
+HoloData:clear()
+ClipData:clear()
+
+function void holoCheck()
+{
+    if(HoloData:count() >= holoMaxAmount())
+    {
+        error("Hololimit too low.")      
+    }       
+}
+
+function void holo(Index, Vector:vector, Scale:vector, Angle:angle, Col1or:vector, Model:string, Parent, Alpha, Mat1erial:string)
+{ 
+    holoCheck()     
+    HoloData[HoloData:count() + 1, table] = table(Index, Vector, Scale, Angle, Col1or, Model, Parent, Alpha, Mat1erial)    
+}
+
+function void holo(ID:string, Vector:vector, Scale:vector, Angle:angle, Col1or:vector, Model:string, Parent, Alpha, Mat1erial:string)
+{ 
+    holoCheck()         
+    local Hash = hash(ID)
+    HoloData[HoloData:count() + 1, table] = table(Hash, Vector, Scale, Angle, Col1or, Model, Parent, Alpha, Mat1erial)   
+    
+    Hashes[ID, number] = Hash 
+}
+
+function void holo(ID:string, Vector:vector, Scale:vector, Angle:angle, Col1or:vector, Model:string, Parent:string, Alpha, Mat1erial:string)
+{ 
+    holoCheck()       
+    local HashA = hash(ID)  
+    local HashB = hash(Parent)
+    HoloData[HoloData:count() + 1, table] = table(HashA, Vector, Scale, Angle, Col1or, Model, HashB, Alpha, Mat1erial) 
+    
+    Hashes[ID, number]     = HashA
+    Hashes[Parent, number] = HashB
+}
+
+function void holo(Index, Vector:vector, Scale:vector, Angle:angle, Col1or:vector, Model:string, Parent:string, Alpha, Mat1erial:string)
+{ 
+    holoCheck()     
+    local Hash = hash(Parent)
+    HoloData[HoloData:count() + 1, table] = table(Index, Vector, Scale, Angle, Col1or, Model, Hash, Alpha, Mat1erial)  
+    Hashes[Parent, number] = Hash  
+}
+
+function void clip(Index, Position:vector, Direction:vector, Transparense)
+{  
+    ClipData[ClipData:count() + 1, table] = table(Index, Position, Direction, Transparense)    
+}      
+
+function void clip(ID:string, Position:vector, Direction:vector, Transparense)
+{  
+    ClipData[ClipData:count() + 1, table] = table(hash(ID), Position, Direction, Transparense)    
+}      
+
+
+LenA = 95
+LenB = 115
+LenC = 30
+
+Z = 40
+YY = 40
+XX = 40
+
+SkelAlpha = 50
+TempModelAlpha = 255
+
+holo("base", vec(0,0,-Z), vec(1), ang(), vec(0,0,255), "", 0, 255, "")
+
+
+
+holo("fl hip", vec(XX,20,-Z), vec(), ang(), vec(0,0,255), "", "base", SkelAlpha, "")
+holo("fr hip", vec(XX,-20,-Z), vec(), ang(), vec(0,0,255), "", "base", SkelAlpha, "")
+holo("cl hip", vec(0,-YY,-Z), vec(), ang(), vec(0,0,255), "", "base", SkelAlpha, "")
+holo("cr hip", vec(0,YY,-Z), vec(), ang(), vec(0,0,255), "", "base", SkelAlpha, "")
+holo("bl hip", vec(-XX,20,-Z), vec(), ang(), vec(0,0,255), "", "base", SkelAlpha, "")
+holo("br hip", vec(-XX,-20,-Z), vec(), ang(), vec(0,0,255), "", "base", SkelAlpha, "")
+
+holo("fl knee", vec(0,0,LenA), vec(), ang(), vec(0,0,255), "", "fl hip", SkelAlpha, "")
+holo("fr knee", vec(0,0,LenA), vec(), ang(), vec(0,0,255), "", "fr hip", SkelAlpha, "")
+holo("cl knee", vec(0,0,LenA), vec(), ang(), vec(0,0,255), "", "cl hip", SkelAlpha, "")
+holo("cr knee", vec(0,0,LenA), vec(), ang(), vec(0,0,255), "", "cr hip", SkelAlpha, "")
+holo("bl knee", vec(0,0,LenA), vec(), ang(), vec(0,0,255), "", "bl hip", SkelAlpha, "")
+holo("br knee", vec(0,0,LenA), vec(), ang(), vec(0,0,255), "", "br hip", SkelAlpha, "")
+
+holo("fl ankle", vec(0,0,LenB), vec(), ang(), vec(0,0,255), "", "fl knee", SkelAlpha, "") # 13
+holo("fr ankle", vec(0,0,LenB), vec(), ang(), vec(0,0,255), "", "fr knee", SkelAlpha, "")
+holo("cl ankle", vec(0,0,LenB), vec(), ang(), vec(0,0,255), "", "cl knee", SkelAlpha, "")
+holo("cr ankle", vec(0,0,LenB), vec(), ang(), vec(0,0,255), "", "cr knee", SkelAlpha, "")
+holo("bl ankle", vec(0,0,LenB), vec(), ang(), vec(0,0,255), "", "bl knee", SkelAlpha, "")
+holo("br ankle", vec(0,0,LenB), vec(), ang(), vec(0,0,255), "", "br knee", SkelAlpha, "")
+
+holo("fl foot", vec(0,0,LenC), vec(), ang(), vec(0,0,255), "", "fl ankle", SkelAlpha, "")
+holo("fr foot", vec(0,0,LenC), vec(), ang(), vec(0,0,255), "", "fr ankle", SkelAlpha, "")
+holo("cl foot", vec(0,0,LenC), vec(), ang(), vec(0,0,255), "", "cl ankle", SkelAlpha, "")
+holo("cr foot", vec(0,0,LenC), vec(), ang(), vec(0,0,255), "", "cr ankle", SkelAlpha, "")
+holo("bl foot", vec(0,0,LenC), vec(), ang(), vec(0,0,255), "", "bl ankle", SkelAlpha, "")
+holo("br foot", vec(0,0,LenC), vec(), ang(), vec(0,0,255), "", "br ankle", SkelAlpha, "")
+
+
+
+holo("skel flh", vec(0,0,LenA / 2), vec(0.5,0.5,LenA / 12), ang(), vec(), "", "fl hip", TempModelAlpha, "")
+holo("skel frh", vec(0,0,LenA / 2), vec(0.5,0.5,LenA / 12), ang(), vec(), "", "fr hip", TempModelAlpha, "")
+
+holo("skel clh", vec(0,0,LenA / 2), vec(0.5,0.5,LenA / 12), ang(), vec(), "", "cl hip", TempModelAlpha, "")
+holo("skel crh", vec(0,0,LenA / 2), vec(0.5,0.5,LenA / 12), ang(), vec(), "", "cr hip", TempModelAlpha, "")
+
+holo("skel blh", vec(0,0,LenA / 2), vec(0.5,0.5,LenA / 12), ang(), vec(), "", "bl hip", TempModelAlpha, "")
+holo("skel brh", vec(0,0,LenA / 2), vec(0.5,0.5,LenA / 12), ang(), vec(), "", "br hip", TempModelAlpha, "")
+
+
+
+holo("skel flk", vec(0,0,LenB / 2), vec(0.5,0.5,LenB / 12), ang(), vec(), "", "fl knee", TempModelAlpha, "")
+holo("skel frk", vec(0,0,LenB / 2), vec(0.5,0.5,LenB / 12), ang(), vec(), "", "fr knee", TempModelAlpha, "")
+
+holo("skel clk", vec(0,0,LenB / 2), vec(0.5,0.5,LenB / 12), ang(), vec(), "", "cl knee", TempModelAlpha, "")
+holo("skel crk", vec(0,0,LenB / 2), vec(0.5,0.5,LenB / 12), ang(), vec(), "", "cr knee", TempModelAlpha, "")
+
+holo("skel blk", vec(0,0,LenB / 2), vec(0.5,0.5,LenB / 12), ang(), vec(), "", "bl knee", TempModelAlpha, "")
+holo("skel brk", vec(0,0,LenB / 2), vec(0.5,0.5,LenB / 12), ang(), vec(), "", "br knee", TempModelAlpha, "")
+
+
+
+holo("skel fla", vec(0,0,LenC / 2), vec(0.5,0.5,LenC / 12), ang(), vec(), "", "fl ankle", TempModelAlpha, "")
+holo("skel fra", vec(0,0,LenC / 2), vec(0.5,0.5,LenC / 12), ang(), vec(), "", "fr ankle", TempModelAlpha, "")
+
+holo("skel cla", vec(0,0,LenC / 2), vec(0.5,0.5,LenC / 12), ang(), vec(), "", "cl ankle", TempModelAlpha, "")
+holo("skel cra", vec(0,0,LenC / 2), vec(0.5,0.5,LenC / 12), ang(), vec(), "", "cr ankle", TempModelAlpha, "")
+
+holo("skel bla", vec(0,0,LenC / 2), vec(0.5,0.5,LenC / 12), ang(), vec(), "", "bl ankle", TempModelAlpha, "")
+holo("skel bra", vec(0,0,LenC / 2), vec(0.5,0.5,LenC / 12), ang(), vec(), "", "br ankle", TempModelAlpha, "")
+
+selfDestruct()
+
+
+
+
+
+
+
+
+
+
+
+
+
