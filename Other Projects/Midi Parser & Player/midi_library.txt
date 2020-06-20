@@ -1,0 +1,574 @@
+@name Midi Library
+
+# [ Track Parser Related ] #
+@persist [TracksParsingDone HeaderParsed TracksBuffer InTrack]:number [TracksResult TempTrack]:table TrackParsingProgress
+
+# [ Event Parser Related ] #
+@persist [EventsParsingDone EventsBuffer LastStatus TrackTempo]:number [EventsResult]:table EventsParsingProgress
+
+# [ Track & Event-Parser merge ] #
+@persist [InfoParsed MidiParsed TrackCounter]:number [MidiResult MidiTracks MidiMeta]:table MidiParsingProgress
+
+# [ Misc ] #
+@persist MidiPerf 
+
+if( first() )
+{
+    MidiPerf = 90
+    
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # ----------------------------------------------- HELPERS --------------------------------------------------- #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+             
+    function void midiLibReset()
+    {
+        TracksParsingDone = 1
+        EventsParsingDone = 1
+        MidiParsed = 1
+        
+        HeaderParsed = 0  
+        TracksBuffer = 1
+        InTrack = 0
+        TracksResult = table()
+        TempTrack = table()
+        TrackParsingProgress = 0
+        
+        EventsBuffer = 1
+        LastStatus = 0
+        TrackTempo = 0
+        EventsResult = table()
+        EventsParsingProgress = 0
+        
+        InfoParsed = 0
+        TrackCounter = 1
+        MidiResult = table()
+        MidiTracks = table()
+        MidiMeta   = table()
+    }
+            
+    function void printHex(Char:string)
+    {
+        print(toString(toByte(Char), 16))    
+    }
+    
+    function number string:b()
+    {
+        return toByte(This)   
+    }
+
+    function number string:hexToNumber() # Will get the total value of multiple hex numbers such as 0xFFFF or 0x42E942
+    {
+        local Result = "0x"     
+        foreach(I, Char:string = This:explode(""))
+        {
+            Result += toString(toByte(Char), 16)
+        }
+        return Result != "0x" ? Result:toNumber(16) : 0
+    }
+    
+    function void warning(Output:string)
+    {
+        printColor(vec(255), "[",vec(255,255,0), "Warning", vec(255), "] ", vec(255,0,0), Output)    
+    }
+        
+    function string string:getHexString()
+    {
+        local Result = ""     
+        foreach(I, Char:string = This:explode(""))
+        {
+            local Hex = toString(toByte(Char), 16)
+            Result += (Hex:length() == 1 ? "0" + Hex : Hex) + (I < This:length() - 1 ? "-" : "")
+        }
+        return Result
+    }
+    
+    function table string:deltaInfo(I) # Yoinked this function from the web and modified it a bit
+    {
+        local Result = table()
+        
+        for(C = 1, 4)
+        {
+            local Byte = toByte(This:sub(I,I))
+            Result["delta", number] = Result["delta", number] << 7
+            Result["delta", number] = Result["delta", number] || (Byte && 0x7F)
+            Result["len", number] = C
+            if(( C && 0x80) != 0x80)
+            {
+                return Result  
+            }   
+        }
+        
+        return Result   
+    }
+
+    function string eventType(Type)
+    {
+        local Res = ""
+        switch(Type)
+        {
+            case 0x80, Res = "noteoff"           break
+            case 0x90, Res = "noteon"            break
+            case 0xA0, Res = "aftertouch"        break
+            case 0xB0, Res = "controller"        break
+            case 0xC0, Res = "programchange"     break
+            case 0xD0, Res = "channelaftertouch" break
+            case 0xE0, Res = "pitch"             break           
+        }
+        return Res   
+    }
+
+    function number volume(Velocity)
+    {
+        return (1 / 128) * (Velocity + 1)
+    }
+
+    function number pitch(Note)
+    {
+        return floor(2 ^ ((Note + 5) / 12), 1) #2 ^ (((Note + 1) - 69) / 12) * 50 
+    }
+
+    
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # ----------------------------------------------- TRACKS PARSER --------------------------------------------- # 
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    
+    TracksParsingDone = 1        
+    function table string:getTracksFromMidi()
+    {
+        local Result = table()
+        
+        if(TracksParsingDone)
+        {
+            TrackParsingProgress = 0
+            InTrack           = 0
+            InEvents          = 0
+            HeaderParsed      = 0
+            TracksBuffer      = 15 # Not 1 cause the header gets parsed before
+            TracksResult      = table("header" = table(), "tracks" = table())
+            TempTrack         = table("meta" = table(), "raw" = "")
+            TracksParsingDone = 0   
+        }           
+        else
+        {
+            if(!HeaderParsed)
+            {
+                if(This:sub(1,4) != "MThd") # Identifies if the file is a Midi. 
+                {
+                    error("The input string was not a Midi")   
+                }
+                
+                if(This:sub(5,8):hexToNumber() != 6) # This value is always 6, if its not 6, then something is fucked.
+                {
+                    error("The Headersize did not equal its default value(6).")    
+                }
+                
+                local Header = table()
+                              
+                local FileFormat = This:sub(9,10):hexToNumber()
+                if(FileFormat < 0 | FileFormat > 2)
+                {
+                    error("Invalid Fileformat(" + FileFormat + ") detected")   
+                }
+                Header["format", number] = FileFormat
+                
+                local TrackCount = This:sub(11,12):hexToNumber()
+                if(TrackCount > 2 & !FileFormat)
+                {
+                    error("More than 2 Tracks detected in Single-Track Midi")   
+                }
+                elseif(TrackCount < 0 | TrackCount > 65535)
+                {
+                    error("Invalid Trackamount detected. Track count is exceeding 65535 or below 0")   
+                }               
+                Header["trackcount", number] = TrackCount
+
+                local DeltaTicks = This:sub(13,14):hexToNumber()
+                if(DeltaTicks <= 0)
+                {
+                    DeltaTicks = 120 # If its 0, just use the Midi default(120). 
+                }
+                Header["divison", number] = DeltaTicks
+                
+                TracksResult["header", table] = Header
+
+                HeaderParsed = 1
+            } 
+            else
+            {
+                while(perf(MidiPerf))
+                {
+                    local B = TracksBuffer                 
+                    # [ --- Track Header --- ] #
+                    if(This:sub(B, B + 3) == "MTrk")
+                    {
+                        if(InTrack) # Somehow still in a track? Maybe a track ending status has been forgotten idk   
+                        {
+                            warning("A track did not have a valid ending.")                            
+                            TracksResult["tracks", table]:pushTable(TempTrack)                            
+                            TempTrack = table("meta" = table(), "raw" = "")                 
+                        }
+                        
+                        TempTrack["meta", table]["size", number] = This:sub(B + 4, B + 7):hexToNumber()
+                        
+                        TracksBuffer += 8
+                        InTrack = 1  
+                        continue
+                    }
+                    # [ -------------------- ] #
+                    
+                    
+                    # [ --- Track Meta & Raw Event Data --- ] #
+                    if(InTrack)
+                    {                
+                        local C = This:index(B)
+
+                        TempTrack["raw", string] = TempTrack["raw", string] + C
+
+                        if(C:b() == 0xFF & This:index(B + 1):b() == 0x2F & This:index(B + 2):b() == 0x00) # End-Of-Track MetaEvent
+                        {
+                            TempTrack["raw", string] = TempTrack["raw", string]:sub(1, TempTrack["raw", string]:length() - 2)          
+                            TracksResult["tracks", table][TracksResult["tracks", table]:count() + 1, table] = TempTrack                            
+                            TempTrack = table("meta" = table(), "raw" = "")
+                            InTrack  = 0         
+                        }
+                    }
+                    # [ ----------------------------------- ] #
+                
+            
+                    # [ --- Break the Loop --- ] #          
+                    if(TracksBuffer >= This:length())
+                    {
+                        if(InTrack) # Somehow still in a track? Maybe a track ending status has been forgotten idk   
+                        {
+                            warning("A track did not have a valid ending.")                            
+                            TracksResult["tracks", table]:pushTable(TempTrack)                                                     
+                        }                            
+                                      
+                        TracksParsingDone = 1
+                        Result = TracksResult
+                        break
+                    }           
+                    TracksBuffer = min(TracksBuffer + 1, This:length())
+                    # [ ---------------------- ] #
+                    
+                    TrackParsingProgress = (100 / This:length()) * TracksBuffer
+                }     
+            }              
+        }
+        
+        return Result
+    }   
+    
+    function number isParsingTracks()
+    {
+        return !TracksParsingDone    
+    } 
+
+    
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # ----------------------------------------------- EVENTS PARSER --------------------------------------------- #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    
+    EventsParsingDone = 1
+
+    function string string:cur()
+    {
+        return This:index(EventsBuffer)   
+    }
+  
+    function number string:readNext()
+    {
+        EventsBuffer++
+        return This:cur():b()               
+    }
+
+    function string string:readNextChar()
+    {
+        EventsBuffer++
+        return This:cur()               
+    }
+    
+    function string string:readLength(Len)
+    {
+        local Temp = ""
+        for(I = 1, Len)
+        {
+            Temp += This:readNextChar()   
+        }   
+        return Temp
+    }
+
+    function number string:readDelta()
+    {
+        local Result = 0
+ #       local Byte = This:cur():b()
+        for(C = 1, 4)
+        {   
+            local Byte = This:readNext()   
+
+            Result = Result << 7 
+            Result = Result || (Byte && 0x7F)
+            
+            if((Byte && 0x80) != 0x80)
+            {
+                return Result   
+            }       
+        }
+        return Result   
+    }
+
+    function number realtime(Delta, A, B)
+    {
+        return (Delta * 60) / (max(A, 1) * max(B, 1))   
+    }
+
+    function table string:getEventsFromTrackBeta(Tempo, Division, OnlyOnEvents)
+    {
+        local Result = table()
+        
+        if(EventsParsingDone)
+        {
+            LastStatus        = -1
+            EventsBuffer      = 0
+            TrackTempo        = Tempo
+            TempEvent         = table()
+            LastEvent         = table()    
+            EventsParsingDone = 0
+            EventsParsingProgress = 0
+            
+            local FirstDelta  = realtime(This:readDelta(), TrackTempo, Division) # The Track starts with an initial Deltatime
+            EventsResult      = table("meta" = table("playtime" = FirstDelta), "events" = table())
+        }
+        else
+        {
+            while(perf(MidiPerf))
+            {
+                local Current = This:readNext()         
+                local Status = (Current && 0xF0)                                        
+
+                if((Current && 0x80) == 0) # We need this cause of the "Running Status" type. Its a really weird mechanic some Midi's use. 
+                {
+                    Status = LastStatus   
+                    EventsBuffer -= 1 # Since Running Status events are 1 byte shorter, we go 1 byte backwards :)
+                }
+                else
+                {
+                    LastStatus = Status   
+                }
+                
+                if(Status == 0xF0)
+                {
+                    if(Current == 0xFF)
+                    {
+                        local MetaType   = This:readNext()
+                        local MetaLength = This:readNext()        
+                        local MetaValue  = This:readLength(MetaLength)
+                        
+                        if(MetaType == 0x51)
+                        {
+                            TrackTempo = round(60000000 / MetaValue:hexToNumber())       
+                        }
+                        elseif(MetaType == 0x01)
+                        {
+                            EventsResult["meta", table]["text", string] = MetaValue   
+                        }
+                        elseif(MetaType == 0x02)
+                        {
+                            EventsResult["meta", table]["copyright", string] = MetaValue   
+                        }
+                        elseif(MetaType == 0x03)
+                        {
+                            EventsResult["meta", table]["trackname", string] = MetaValue   
+                        }
+                        elseif(MetaType == 0x04)
+                        {
+                            EventsResult["meta", table]["instrument", string] = MetaValue   
+                        }
+                    }
+                    elseif(Current == 0xF0 | Current == 0xF7)
+                    {
+                        local SySexLength = This:readDelta()
+                        local SySexData   = This:readLength(SySexLength)
+                    }
+                }
+                else
+                {                       
+                    if((Status == 0x80 & !OnlyOnEvents) | Status == 0x90)
+                    {
+                        local Note     = This:readNext()
+                        local Velocity = This:readNext()
+
+                        if((Note >= 0 & Note <= 127) & (Velocity >= 0 & Velocity <= 127))
+                        {               
+                            local Type     = eventType(Status)                        
+                            if(Type == "noteon" & !Velocity){ Type = "noteoff" }    
+                                                    
+                            local Channel  = (Current && 0x0F) + 1                                                    
+                            local Pitch    = pitch(Note)
+                            
+                            if(Pitch >= 0 & Pitch <= 255)
+                            {                            
+                                local Volume = 0
+                                if(Type == "noteon")
+                                {
+                                    Volume = volume(Velocity)            
+                                }  
+                                                    
+                                local NewEvent = table("channel" = Channel, 
+                                                       "note"    = (Note + 1),
+                                                       "vel"     = (Velocity + 1),
+                                                       "pitch"   = Pitch,
+                                                       "volume"  = Volume, 
+                                                       "timing"  = floor(EventsResult["meta", table]["playtime", number], 2),
+                                                       "type"    = Type)
+                                                    
+                                EventsResult["events", table][EventsResult["events", table]:count() + 1, table] = NewEvent 
+                            } 
+                        }
+                    }
+                    elseif(Status == 0xA0 | Status == 0xE0 | Status == 0xB0)
+                    {   
+                        local Param1 = This:readNext()   
+                        local Param2 = This:readNext()
+                    }       
+                    elseif(Status == 0xD0 | Status == 0xC0)
+                    {
+                        local Param = This:readNext() # These 2 states only have 1 databyte
+                    }
+                    else
+                    {
+                        if(Status != 0x80)
+                        {
+                            error("Unknown Status byte detected (0x" + toString(This:cur():b(), 16) + ").") 
+                        } 
+                    }
+                }    
+                
+                local Delta = realtime(This:readDelta(), TrackTempo, Division)
+                
+                if(Delta < 0x7FFFFFF)
+                {
+                    EventsResult["meta", table]["playtime", number] = EventsResult["meta", table]["playtime", number] + Delta
+                }
+                            
+                EventsParsingProgress = (100 / This:length()) * EventsBuffer
+                            
+                # [ --- Loop Breaker --- ] #
+                if(EventsBuffer >= This:length())
+                {
+                    Result = EventsResult
+                    EventsParsingDone = 1
+                    break   
+                }
+                # [ -------------------- ] #                
+            }   
+        }
+        
+        return Result   
+    }
+      
+    function number table:getPlaytime()
+    {
+        local Largest = 0     
+        for(I = 1, This:count())
+        {
+            local Time = This[I, table]["meta", table]["playtime", number]
+            if(Time > Largest)
+            {
+                Largest = Time   
+            }
+        }        
+        return Largest   
+    }
+
+    function number isParsingEvents()
+    {
+        return !EventsParsingDone   
+    }
+
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+    # ----------------------------------------------- PARSER MERGE ---------------------------------------------- #
+    # [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+    MidiParsed = 1
+    function table string:parseMidi(Tempo, OnlyOn)
+    {
+        local Result = table()
+        
+        if(MidiParsed)
+        {
+            MidiHeader   = table()
+            MidiTracks   = table()
+            MidiMeta     = table()
+            MidiResult   = table("playtime" = 0)
+            InfoParsed   = 0
+            TrackCounter = 1
+            MidiParsed   = 0 
+            MidiParsingProgress = 0  
+        }
+        else
+        {
+            if(!InfoParsed)
+            {
+                MidiTracks = This:getTracksFromMidi()     
+                
+                MidiParsingProgress = TrackParsingProgress * 0.2
+                
+                if(!isParsingTracks())
+                {
+                    InfoParsed = 1       
+                }
+            }
+            else
+            {
+                local Tracks = MidiTracks["tracks", table]   
+                
+                if(TrackCounter < Tracks:count())
+                {
+                    local Data = Tracks[TrackCounter, table]["raw", string]:getEventsFromTrackBeta(Tempo, MidiTracks["header", table]["division", number], OnlyOn)
+                    local Events = Data["events", table]
+                    local Playtime = Data["meta", table]["playtime", number]                                                        
+                                    
+                    if(!isParsingEvents())
+                    {
+                        if(MidiResult["playtime", number] < Playtime)
+                        {
+                            MidiResult["playtime", number] = Playtime  
+                        }
+                        
+                        MidiMeta:pushTable(Data["meta", table])
+                        MidiResult:pushTable(Events)
+                
+                        MidiParsingProgress += (80 / Tracks:count())
+                        
+                        TrackCounter++   
+                    }      
+                }
+                else
+                {
+                    MidiParsed = 1
+                    Result = MidiResult   
+
+                    MidiParsingProgress = 100
+                }
+            }   
+        }
+        
+        return Result        
+    }       
+
+    function void table:summary()
+    {
+        print("Total Event-Tracks: " + This:count())
+        foreach(I, Track:number = This:keys())
+        {
+            print("Track: " + I + " | Total Events: " + This[Track, table]:count())    
+        }   
+    }
+    
+    function number isParsingMidi()
+    {
+        return !MidiParsed   
+    }
+}
+

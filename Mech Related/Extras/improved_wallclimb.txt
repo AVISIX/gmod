@@ -1,0 +1,80 @@
+@name Improved Wallclimb
+@persist Precision C
+@model models/hunter/blocks/cube05x05x05.mdl
+
+interval(60)
+
+E = entity()
+
+if( first() )
+{
+    Precision = 5
+    
+    E:propGravity(0)
+
+    function void makeHolos(I)
+    {
+        for(X = 1, I)
+        {
+            holoCreate(X)   
+            holoColor(X, hsv2rgb((360 / I) * X, 1, 1))
+        }   
+    }
+
+    makeHolos(Precision)
+
+    function ranger entity:recRanger(Length, Position:vector, Iteration, Iterations, Pitch, Yaw, Increase)
+    {
+        local Result = rangerOffset(Length, Position, This:toWorld(ang(Pitch ^ Increase, Yaw,0)):forward())
+        
+        if(Iteration >= Iterations | Result:hit())
+        {
+            return Result   
+        }     
+        
+        return This:recRanger(Length, Result:position(), Iteration + 1, Iterations, Pitch ^ Increase, Yaw, Increase)
+    }
+    
+    function table entity:getWallclimbProperties(Length, Iterations, Pitch, RangerCount, Increase, Extra:angle)
+    {
+        local Result = table("center"=vec(),"rotation"=ang())
+        
+        local WallPitch = 0
+        local WallRoll  = 0
+        
+        local RC = max(RangerCount, 4)
+        local TP = This:pos()
+        
+        for(I = 1, RC)
+        {
+            local Yaw    = (360 / RC) * I + 45
+            local Ranger = This:recRanger(Length, TP, 1, Iterations, Pitch, Yaw, Increase)
+            local RPos   = Ranger:position()
+            local Dist   = RPos:distance(TP)
+            
+            WallPitch += Dist * cos((I / RC) * 360 + (180 / RC + 22.5))
+            WallRoll  += Dist * sin((I / RC) * 360 + (180 / RC + 22.5))
+            
+            holoPos(I, RPos)
+
+            Result["center", vector] = Result["center", vector] + RPos
+            Result["rangers", table][I, vector] = RPos
+        }
+
+        Result["center", vector] = Result["center", vector] / RC
+        
+        local P = clamp(WallPitch, -45,45) 
+        local R = clamp(WallRoll,  -45,45) 
+        
+        Result["rotation", angle] = ang(P + Extra:pitch(), This:angles():yaw() + Extra:yaw(), -R + Extra:roll())
+             
+        return Result
+    }
+    
+}
+
+local WallData = E:getWallclimbProperties(50, 4, 10, Precision, 1.283, ang())
+E:applyAngForce((WallData["rotation", angle]:setYaw(0) * 2 - E:angVel() * 0.5) * E:mass())
+
+local Hover = (WallData["center", vector] + E:pos() * 3) / 4
+E:applyForce((((Hover + E:up() * 20) - E:pos()) * 10 - E:vel() * 0.5) * E:mass())

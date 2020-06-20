@@ -1,0 +1,909 @@
+@name Midi Library V3
+
+# [ Config ] #
+@persist MidiPerf [PlayablePianoBank VanillaBank]:table 
+
+# [ Parser ] #
+@persist MidiBuffer MidiParsing MidiTempo LastStatus MidiDone MidiInTrack MidiParsingProgress LongestTime MidiTotalSoundsLoaded UdidCounter PrevUid YieldTime
+@persist [MidiResult TempTrack SoundDurationBank]:table
+
+# [ Debug ] #
+@persist MidiDebugImporting MidiDebugImported MidiDebugDone
+
+if( first() )
+{
+    #[
+        Garry's Mod Expression 2 Midi Parsing Library, made by Sixmax.
+        
+        To hear everything make sure to download the "Playable Piano"-Addon from the Workshop.
+        
+        Also a good thing to do is exceed the sound limitations from E2.
+        
+        What I use:
+           wire_expression2_maxsounds 150
+           wire_expression2_sound_burst_max 150
+           wire_expression2_sound_burst_rate 0
+        
+        Those Convars have to be changed in the Server console or set as startup in the autocexec file.
+
+        
+        To add more sounds, edit the tables below & the base49, instrument4Program functions.
+        Make sure to follow the specific Midi Mapping: https://www.midi.org/specifications/item/gm-level-1-sound-set    
+    ]#
+            
+    MidiPerf = 90
+
+    SoundDurationBank = table()
+
+    PlayablePianoBank = table(
+        "piano",
+        "synthesizer",
+        "violin",
+        "accordion",
+        "eguitar",
+        "guitar",
+        "sax",
+        "organ",
+        "harp"
+    )
+
+    VanillaBank = table(
+        "bass"     = "instruments/bass.wav",
+        "cymbal"   = "instruments/cymbal.wav",
+        "hi hat"   = "instruments/hi_hat.wav",
+        "hi-hat"   = "instruments/hi_hat.wav",
+        "hihat"    = "instruments/hi_hat.wav",
+        "high tom" = "instruments/high_tom.wav",
+        "hightom"  = "instruments/high_tom.wav",
+        "high-tom" = "instruments/high_tom.wav",
+        "snare"    = "instruments/snare.wav",
+        "synth"    = "synth/tri.wav"     
+    )
+
+    #[
+        Midi will be returned in a JSON type format.
+        
+        The format is:
+            
+        Midi:
+            header:
+                > Format
+                > Trackcount
+                > Division
+                > Playtime
+            
+            tracks:
+                n: 
+                    meta:
+                        > text
+                        > name
+                        > copyright
+                        > instrument
+                        
+                    events:
+                        n:
+                            > note
+                            > channel
+                            > velocity
+                            > type
+                            > volume
+                            > pitch
+                            > delta 
+                            > timing
+                            > playtime
+                            > sound
+                            > fade
+        
+        
+        "n" is any number.
+    ]#
+
+    
+
+    function string bass49(Key)
+    {
+        if(Key == 49 | Key == 51 | Key == 52 | Key == 55 | Key == 57 | Key == 59)
+        {
+            return "cymbal"   
+        }
+        
+        if(Key == 42 | Key == 44 | Key == 46)
+        {
+            return "hihat"   
+        }
+        
+        if(Key == 41 | Key == 43 | Key == 45 | Key == 47 | Key == 48)
+        {
+            return "high-tom"   
+        }
+        
+        if(Key == 38 | Key == 40)
+        {
+            return VanillaBank["snare", string]   
+        }
+        
+        if(Key == 53 | Key == 56)
+        {
+            return "wowozela/samples/bell.wav"
+        }
+         
+        return VanillaBank["bass", string]      
+    }
+
+    function string instrument4Program(Program)
+    {
+        # Map = https://www.midi.org/specifications/item/gm-level-1-sound-set
+        
+        local P = Program + 1
+        if(P <= 8)
+        {
+            if(P == 5 | P == 6)
+            {
+                return "wowozela/samples/pianostab.wav"   
+            }
+            
+            return "piano"   
+        }
+        
+        if(P <= 16)
+        {
+            return "wowozela/samples/dingdong.wav"
+            # Chromatic Percussion   
+        }
+        
+        if(P <= 24)
+        {
+            return "organ"   
+        }
+        
+        if(P <= 32)
+        {
+            if(P >= 27)
+            {
+                return "eguitar"  
+            }
+            
+            return "guitar"   
+        }
+        
+        if(P <= 40)
+        {
+            return "bass"    
+        }
+        
+        if(P <= 49)
+        {
+            if(P == 47)
+            {
+                return "harp"   
+            }
+            
+            if(P == 51 | P == 52)
+            {
+                return "wowozela/samples/string.wav"   
+            }
+            
+            return "violin"  
+        }
+        
+        if(P <= 56)
+        {
+            # Ensemble    
+        }
+        
+        if(P <= 72)
+        {
+            if(P == 57)
+            {
+               # return "wowozela/samples/skull.wav"   
+            }
+            
+            if(P >= 65 & P <= 68)
+            {
+                return "sax"   
+            }
+            # Reed   
+        }
+        
+        if(P <= 80)
+        {
+            # Pipe   
+        }
+        
+        if(P <= 88)
+        {
+            if(P == 81)
+            {
+          #      return "synth/square_440.wav"   
+            }
+            
+         #   return "synth/tri.wav"
+            return "synthesizer"
+        }
+        
+        if(P <= 96)
+        {
+            # Synth Pad   
+        }
+        
+        if(P <= 104)
+        {
+            # Synth Effects   
+        }
+        
+        if(P <= 112)
+        {
+            # Ethnic    
+        }
+        
+        if(P <= 120)
+        {
+            # Percussive   
+        }
+        
+        if(P <= 128)
+        {
+            # Sound Effects
+            if(P == 122)
+            {
+              #  return "NPC_PoisonZombie.FastBreath"   
+            }
+            
+            if(P == 126)
+            {
+              #  return "NPC_AttackHelicopter.Rotors"   
+            }
+            
+            if(P == 128)
+            {
+              #  return "weapons/357/357_fire2.wav"   
+            }
+        }
+        
+        return "piano"   
+    }
+
+    function string getInstrument(Value:string)
+    {     
+        foreach(I, Key:number = PlayablePianoBank:keys())
+        {
+            local Instr = PlayablePianoBank[Key, string]     
+            if(Value:lower():find(Instr))
+            {
+                return Instr     
+            }
+        }
+
+        foreach(I, Key:string = VanillaBank:keys())
+        {
+            if(Value:lower():find(Key))
+            {
+                return VanillaBank[Key, string]     
+            }         
+        }
+        
+        return "piano"
+    }
+
+    function string getPPianoNote(Note)
+    {        
+        if(Note >= 36 & Note <= 95)
+        {
+            local RealNotes = array()
+            
+            RealNotes[36, string] = "a1"
+            RealNotes[37, string] = "b1"
+            RealNotes[38, string] = "a2"
+            RealNotes[39, string] = "b2"
+            RealNotes[40, string] = "a3"
+            RealNotes[41, string] = "a4"
+            RealNotes[42, string] = "b3"
+            RealNotes[43, string] = "a5"
+            RealNotes[44, string] = "b4"
+            RealNotes[45, string] = "a6"
+            RealNotes[46, string] = "b5"
+            RealNotes[47, string] = "a7"
+            RealNotes[48, string] = "a8"
+            RealNotes[49, string] = "b6"
+            RealNotes[50, string] = "a9"
+            RealNotes[51, string] = "b7"
+            RealNotes[52, string] = "a10"
+            RealNotes[53, string] = "a11"
+            RealNotes[54, string] = "b8" 
+            RealNotes[55, string] = "a12"
+            RealNotes[56, string] = "b9" 
+            RealNotes[57, string] = "a13"
+            RealNotes[58, string] = "b10"
+            RealNotes[59, string] = "a14"
+            RealNotes[60, string] = "a15"
+            RealNotes[61, string] = "b11"
+            RealNotes[62, string] = "a16"
+            RealNotes[63, string] = "b12"
+            RealNotes[64, string] = "a17"
+            RealNotes[65, string] = "a18"
+            RealNotes[66, string] = "b13"
+            RealNotes[67, string] = "a19"
+            RealNotes[68, string] = "b14"
+            RealNotes[69, string] = "a20"
+            RealNotes[70, string] = "b15"
+            RealNotes[71, string] = "a21"
+            RealNotes[72, string] = "a22"
+            RealNotes[73, string] = "b16"
+            RealNotes[74, string] = "a23"
+            RealNotes[75, string] = "b17"
+            RealNotes[76, string] = "a24"
+            RealNotes[77, string] = "a25"
+            RealNotes[78, string] = "b18"
+            RealNotes[79, string] = "a26"
+            RealNotes[80, string] = "b19"
+            RealNotes[81, string] = "a27"
+            RealNotes[82, string] = "b20"
+            RealNotes[83, string] = "a28"
+            RealNotes[84, string] = "a29"
+            RealNotes[85, string] = "b21"
+            RealNotes[86, string] = "a30"
+            RealNotes[87, string] = "b22"
+            RealNotes[88, string] = "a31"
+            RealNotes[89, string] = "a32"
+            RealNotes[90, string] = "b23"
+            RealNotes[91, string] = "a33"
+            RealNotes[92, string] = "b24"
+            RealNotes[93, string] = "a34"
+            RealNotes[94, string] = "b25"
+            RealNotes[95, string] = "a35"
+            
+            return RealNotes[Note, string]
+        }
+
+        return "a1"
+    }
+
+    function void midiLibReset()
+    {
+        YieldTime   = 0
+        MidiBuffer  = 0
+        MidiDone    = 1
+        MidiParsing = 0
+        MidiTempo   = 120
+        LastStatus  = -1
+
+        UdidCounter = 1000
+
+        MidiParsingProgress = 0
+        MidiDebugImporting  = 0
+        MidiDebugImported   = 0    
+        
+        TempTrack                   = table()       
+        MidiResult                  = table()
+        MidiResult["header", table] = table()
+        MidiResult["tracks", table] = table()
+    }
+    
+    function number string:b()
+    {
+        return toByte(This)   
+    }
+
+    function string eventType(Status)
+    {
+        switch(Status)
+        {
+            case 0x80, return "Note Off"           break
+            case 0x90, return "Note On"            break
+            case 0xA0, return "Aftertouch"         break
+            case 0xB0, return "Controller"         break
+            case 0xC0, return "Program Change"     break
+            case 0xD0, return "Channel Aftertouch" break
+            case 0xE0, return "Pitch"              break             
+        }
+        return ""   
+    }
+    
+    function void warning(Output:string)
+    {
+        printColor(vec(255), "[",vec(255,255,0), "Warning", vec(255), "] ", vec(255,0,0), Output)    
+    }
+
+    function string string:cur()
+    {
+        return This:index(MidiBuffer)   
+    }
+
+    function number string:readNext()
+    {
+        MidiBuffer++
+        return This:cur():b()               
+    }
+    
+    function string string:readNextChar()
+    {
+        MidiBuffer++
+        return This:cur()               
+    }
+    
+    function string string:readLength(Len)
+    {
+        local Temp = ""
+        for(I = 1, Len)
+        {
+            Temp += This:readNextChar()   
+        }   
+        return Temp
+    }
+
+    function number string:hexToNumber()
+    {
+        local Result = "0x"     
+        foreach(I, Char:string = This:explode(""))
+        {
+            Result += toString(Char:b(), 16)
+        }
+        return Result != "0x" ? Result:toNumber(16) : 0
+    }
+
+    function number string:readDelta()
+    {
+        local Result = 0
+        for(C = 1, 4)
+        {   
+            local Byte = This:readNext()   
+
+            Result = Result << 7 
+            Result = Result || (Byte && 0x7F)
+            
+            if((Byte && 0x80) != 0x80)
+            {
+                return Result   
+            }       
+        }
+        return Result   
+    }
+
+    function number volume(Velocity)
+    {
+        return (1 / 127) * Velocity 
+    }
+
+    function number pitch(Note)
+    {
+        return floor(2 ^ ((Note + 5) / 12), 1)
+    }
+
+    function number realtime(Delta, Tempo, Division)
+    {
+        return (Delta * 60) / (Tempo * Division)   
+    }   
+        
+    function number bend(Msb, Lsb)
+    {
+        local Bend = (Msb << 7) || Lsb
+        return 2 ^ ((((Bend - 8192) / 8192) * 0.5) / 12)
+    }
+        
+    function table string:decodeMidi(Tempo:number)
+    {
+        local Result = table()
+ 
+        while(perf(MidiPerf) & curtime() > YieldTime)
+        {       
+            if(MidiDone & !MidiParsing)
+            {
+                MidiBuffer = 0
+                
+                if(This:readLength(4) != "MThd")
+                {
+                    error("The given string was not a Midi Bytecode.")   
+                }   
+                
+                if(This:readLength(4):hexToNumber() != 6)
+                {
+                    error("Invalid Headersize detected.")   
+                }
+                
+                local Format = This:readLength(2):hexToNumber()
+                if(Format < 0 | Format > 2)
+                {
+                    error("Invalid Format detected.(" + Format + ")")   
+                }
+                
+                local Tracks = This:readLength(2):hexToNumber()
+                if(Tracks < 0 | Tracks > 65535)
+                {
+                    error("Invalid Track Count detected.(" + Tracks + ")")   
+                }
+                
+                if(Format == 0 & Tracks > 1)
+                {
+                    error("Cannot have multiple tracks with type 0 format.")   
+                }
+
+                local Division = This:readLength(2):hexToNumber()    
+                
+                if((Division && 0x8000) == 0) 
+                {
+                    if(Division <= 0)
+                    {
+                        Division = 120   
+                    }
+                }
+                else
+                {
+                    # If the first bit is NOT set, then the division is in "Frames"
+                    
+                    local Frames = abs(Division && 0x7F00)
+                    local Ticks  = (Division && 0x00FF)
+                    
+                    Division = Ticks  # I have no idea if this is correct lol
+                }
+
+                TempTrack                   = table()       
+                MidiResult                  = table()
+                MidiResult["header", table] = table()
+                        
+                MidiResult["header", table]["format", number]   = Format
+                MidiResult["header", table]["tracks", number]   = Tracks
+                MidiResult["header", table]["division", number] = Division
+                MidiResult["header", table]["playtime", number] = 0
+                MidiResult["tracks", table]                     = table()
+                
+                UdidCounter           = 1000
+                MidiTempo             = Tempo
+                MidiTotalSoundsLoaded = 0
+                LastStatus            = 0
+                MidiDone              = 0
+                MidiParsing           = 1      
+                MidiInTrack           = 0                
+                MidiParsingProgress   = 0
+            }   
+            else
+            {
+                if(!MidiInTrack)
+                {   
+                    if(This:readLength(4) == "MTrk")
+                    {
+                        local TrackSize = This:readLength(4):hexToNumber()
+                        TempTrack       = table("meta"=table("playtime"=0, "instrument"="piano"),"events"=table())
+                        MidiInTrack     = 1   
+                        LastStatus      = 0
+                    }  
+                    else
+                    {
+                        error("Failed to find next Track.")   
+                    }
+                }   
+                else
+                {
+                    local Delta   = This:readDelta()                    
+                    local Current = This:readNext()
+                    
+                    local Real = realtime(Delta, MidiTempo, MidiResult["header", table]["division", number])               
+                    TempTrack["meta", table]["playtime", number] = TempTrack["meta", table]["playtime", number] + Real
+                                        
+                    if((Current && 0xF0) == 0xF0)
+                    {
+                        if(Current == 0xFF)
+                        {
+                            local MetaType   = This:readNext()
+                            local MetaLength = This:readNext()        
+                            local MetaValue  = This:readLength(MetaLength)      
+                    
+                            switch(MetaType)
+                            {
+                                case 0x2F,                           
+                                if(TempTrack["meta", table]["playtime", number] > MidiResult["header", table]["playtime", number])
+                                {
+                                    MidiResult["header", table]["playtime", number] = TempTrack["meta", table]["playtime", number]   
+                                }
+                                MidiInTrack = 0                                
+                                MidiResult["tracks", table][MidiResult["tracks", table]:count() + 1, table] = TempTrack                                   
+                                break   
+                                
+                                case 0x01,
+                                if(MetaLength)
+                                {
+                                    TempTrack["meta", table]["text", string] = MetaValue   
+                                    TempTrack["meta", table]["instrument", string] = getInstrument(MetaValue)                              
+                                } 
+                                break
+                                
+                                case 0x02,
+                                if(MetaLength)
+                                {
+                                    TempTrack["meta", table]["copyright", string] = MetaValue
+                                }
+                                break
+                                
+                                case 0x03,     
+                                if(MetaLength)
+                                {
+                                    TempTrack["meta", table]["name", string] = MetaValue 
+                                    TempTrack["meta", table]["instrument", string] = getInstrument(MetaValue)
+                                }                      
+                                break
+                                
+                                case 0x04,
+                                if(MetaLength)
+                                {
+                                    TempTrack["meta", table]["instrument", string] = MetaValue
+                                    TempTrack["meta", table]["instrument", string] = getInstrument(MetaValue)
+                                }
+                                break
+                                
+                                case 0x51,
+                                MidiTempo = round(60000000 / MetaValue:hexToNumber())  
+                                break
+                                
+                                case 0x00, 
+                                case 0x05, 
+                                case 0x06, 
+                                case 0x07, 
+                                case 0x58, 
+                                case 0x59, 
+                                break
+                            }                            
+                        }
+                        elseif(Current == 0xF0 | Current == 0xF7)
+                        {
+                            local SySexData = This:readLength(This:readDelta())                             
+                        }
+                        else
+                        {
+                            error("Unknown Meta Event(" + toString(Current, 16) + ")")   
+                        }
+                    }
+                    else
+                    {
+                        local Status = (Current && 0xF0)
+                        
+                        if((Current && 0x80) == 0)
+                        {
+                            Status = LastStatus   
+                            MidiBuffer--
+                        }
+                          
+                        if(Status >= 0x80 & Status <= 0xE0)
+                        {
+                            local Channel = (Current && 0x0F)
+                            
+                            if(Status == 0x80 | Status == 0x90)
+                            {
+                                
+                                local Note = This:readNext()                                                                  
+                                if(Note >= 0 & Note <= 127)
+                                {
+                                    
+                                    local Velocity = This:readNext()                                   
+                                    if(Velocity >= 0 & Velocity <= 127)
+                                    {
+                                        local Type = eventType(Status)
+                                        
+                                        if(Type == "Note On" & Velocity == 0)
+                                        {
+                                            Type = "Note Off"   
+                                        }
+                                        
+                                        local Volume = 0
+                                        local Pitch  = 0
+                                        local Sound  = TempTrack["meta", table]["instrument", string]
+                                        
+                                        if(Channel != 9)
+                                        {
+                                            Pitch = pitch(Note)                                                                  
+                                        }
+                                        else
+                                        {
+                                            Sound = bass49(Note)
+                                            Pitch = 100
+                                        }
+                                        
+                                        Volume = volume(Velocity)
+                                        
+                                        if(!Sound:replaceRE("%s", ""))
+                                        {
+                                            Sound = "piano"   
+                                        }
+                                        
+                                        if(Sound:sub(Sound:length() - 3, Sound:length()) != ".wav")
+                                        {
+                                            local N = getPPianoNote(Note+1)
+                                            Sound = "gmodtower/lobby/instruments/" + Sound + "/" + (N) + ".wav"       
+                                            Pitch = 100   
+                                        }
+                                         
+                                        local Duration = 0
+                                        if(SoundDurationBank:exists(Sound))
+                                        {
+                                            Duration = SoundDurationBank[Sound, number]      
+                                        }
+                                        else
+                                        {
+                                            local Dur = soundDuration(Sound)
+                                
+                                            YieldTime = curtime() + 0.05
+                                
+                                            SoundDurationBank[Sound, number] = Dur
+                                            Duration = Dur   
+                                        }
+                                
+                                        if(floor(Duration, 1) < 0.1)
+                                        {
+                                            Duration = 2   
+                                        }            
+
+                                        Duration = max(Duration, 0.15)                                                                     
+                    
+                                        local Udid = round((((Note + 1) * (Channel + 1) * Duration) * Volume) + round(random(1,99999)) * (Pitch / 100)) #abs(round((((randint(1, 99999) - hash(Sound)) * (max(Note, 0.001) * max(Channel, 0.001))) / max(Duration, 0.001)) * ((1 / 255) * max(Pitch, 1))))
+                                        
+                                        TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = Type,
+                                                                                                                          "note"     = Note,
+                                                                                                                          "channel"  = Channel,
+                                                                                                                          "volume"   = Volume,
+                                                                                                                          "pitch"    = Pitch,
+                                                                                                                          "delta"    = Real,
+                                                                                                                          "sound"    = Sound,
+                                                                                                                          "duration" = Duration,
+                                                                                                                          "udid"     = Udid,
+                                                                                                                          "timing"   = TempTrack["meta", table]["playtime", number])
+                                    
+                                        PrevUid = Udid 
+                                    }
+                                }                            
+                            }
+                            elseif(Status == 0xA0 | Status == 0xE0 | Status == 0xB0)
+                            {   
+                                local Param1 = This:readNext()   
+                                local Param2 = This:readNext()
+                                
+                                if(Status == 0xE0)
+                                {  
+                                    local Lsb = Param1
+                                    local Msb = Param2 
+                                    
+                                 ##   local Bend = 2 ^ ((((((Msb << 7) || Lsb) - 8192) / 8192) * 1) / 12) #(Msb << 7) || Lsb
+                                    local Bend = bend(Msb, Lsb) 
+                                 #   Bend = 2 ^ ((((Bend - 8192) / 8192) * 2) / 12)
+ 
+                                    TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = "Pitch Blend",
+                                                                                                                      "increase" = Bend,
+                                                                                                                      "channel"  = Channel,
+                                                                                                                      "timing"   = TempTrack["meta", table]["playtime", number])
+                                }
+                            }       
+                            elseif(Status == 0xD0 | Status == 0xC0)
+                            {
+                                local Param = This:readNext() # These 2 states only have 1 databyte
+                                
+                                if(Status == 0xD0)
+                                {
+                                    local Pressure = (1 / 128) * (Param + 1)
+                                    
+                                    TempTrack["events", table][TempTrack["events", table]:count() + 1, table] = table("type"     = "Aftertouch",
+                                                                                                                      "pressure" = Pressure,
+                                                                                                                      "channel"  = Channel,
+                                                                                                                      "timing"   = TempTrack["meta", table]["playtime", number])
+                                    
+                                }
+                                else
+                                {
+                                    #Program Change  
+                                    local Channel = (Current && 0x0F)
+                                    if(Channel != 9)
+                                    {
+                                        TempTrack["meta", table]["instrument", string] = instrument4Program(Param)
+                                    }
+                                }                                
+                            }
+                        }
+                        else
+                        {
+                            error("Unknown Status Byte detected(" + toString(Current, 16) + ")")   
+                        }    
+                        
+                        LastStatus = Status                          
+                    }                 
+                }     
+            }
+            
+            MidiParsingProgress = (100 / This:length()) * MidiBuffer
+            
+            if(MidiBuffer >= This:length() - 8)
+            {
+                if(MidiInTrack)
+                {
+                    if(TempTrack["meta", table]["playtime", number] > MidiResult["header", table]["playtime", number])
+                    {
+                        MidiResult["header", table]["playtime", number] = TempTrack["meta", table]["playtime", number]   
+                    }
+
+                    MidiInTrack = 0                                
+                    MidiResult["tracks", table]:pushTable(TempTrack)       
+                    TempTrack = table("meta"=table("playtime"=0),"events"=table())
+                }
+                
+                YieldTime           = 0
+                MidiTempo           = 120
+                MidiParsingProgress = 100
+                MidiDone            = 1
+                MidiParsing         = 0
+                MidiBuffer          = 0
+                Result              = MidiResult
+                break   
+            }
+        }
+        
+        return Result
+    }
+    
+    function number isParsing()
+    {
+        return !MidiDone & MidiParsing    
+    }
+    
+    function number parsingDone()
+    {
+        return !isParsing()   
+    }
+
+    function number getParsingProgress()
+    {
+        return MidiParsingProgress  
+    }
+    
+    function void midiLibDebug(File:string)
+    {
+        if(!MidiDebugImported)
+        {
+            runOnFile(1)
+            runOnTick(1)
+          
+            if(!MidiDebugImporting & fileCanLoad())
+            {
+                fileLoad(File)
+                MidiDebugImporting = 1   
+            }
+            else
+            {
+                if(fileClk() & !fileLoading())
+                {
+                    if(fileStatus() == _FILE_OK)
+                    {
+                        MidiDebugImporting = 0     
+                        MidiDebugImported = 1 
+                        hint("Loaded", 3)
+                    }   
+                    else
+                    {           
+                        MidiDebugImporting = 0    
+                        MidiDebugImported = 1
+                    }
+                }   
+            }  
+        }
+        else
+        {
+            if(!MidiDebugDone)
+            {
+                fileRead():decodeMidi(120)  
+            
+                MidiDebugDone = parsingDone()
+            } 
+                  
+            if(changed(MidiDebugDone) & MidiDebugDone)
+            {    
+                MidiDebugImporting = 0
+                MidiDebugImported  = 0
+              
+                printTable(MidiResult)    
+           #     print(MidiResult["tracks", table]:count())
+                
+                runOnFile(0)
+                runOnTick(0)
+            }
+        }        
+    }
+    
+    midiLibReset()  
+}
+
+#midiLibDebug(">e2shared/midiparser/10yard.txt")
+

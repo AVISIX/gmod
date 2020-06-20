@@ -1,0 +1,494 @@
+@name Virtual Reality v1
+@persist MaxPlayers UpdateInfo HC JoinDelay RealmReload
+@persist [VR Materials HoloInfo]:table
+@persist E:entity
+@persist LastPlayers:array
+@trigger none
+@model models/props_lab/monitor02.mdl
+
+interval(60)
+
+#debug/debugportals
+
+#[  
+    VR:
+        game:
+            holos:
+                n:
+                    > id
+                    > index
+                    
+        players:
+            n:
+                info:
+                    > name
+                    > ent
+                    
+                holos:
+                    id: 
+                        > index
+                        
+                avatar:
+]#
+
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+if(first() )
+{ 
+    MaxPlayers = 4 
+ 
+    Materials = table(
+        "view"  = "debug/debugdrawflat",
+        "frame" = "debug/debugportals"
+    )
+    
+    MaxPlayers = max(MaxPlayers, 1)
+    E = entity()
+    VR["game", table]    = table()
+    VR["players", table] = table()
+    VR["game", table]["holos", table] = table()    
+    HC = 1
+    
+    function void number:edit(Pos:vector, Scale:vector, Angle:angle, Color:vector, Material:string, Model:string)
+    {
+        holoPos(This, Pos)
+        holoScale(This, Scale)
+        holoAng(This, Angle)
+        holoColor(This, Color)
+        holoMaterial(This, Materials[Material, string])
+        holoModel(This, Model)
+    }    
+    function void number:edit(Pos:vector, Scale:vector, Angle:angle, Color:vector, Material:string, Model:string, Parent:number)
+    {
+        holoPos(This, Pos)
+        holoScale(This, Scale)
+        holoAng(This, Angle)
+        holoColor(This, Color)
+        holoMaterial(This, Materials[Material, string])
+        holoModel(This, Model)
+        holoParent(This, Parent)
+    }
+    
+    function void number:edit(Pos:vector, Scale:vector, Angle:angle, Color:vector, Material:string, Model:string, Parent:entity)
+    {
+        holoPos(This, Pos)
+        holoScale(This, Scale)
+        holoAng(This, Angle)
+        holoColor(This, Color)
+        holoMaterial(This, Materials[Material, string])
+        holoModel(This, Model)
+        holoParent(This, Parent)
+    }
+
+    function void number:edit(Pos:vector, Scale:vector, Angle:angle, Color:vector, Material:string, Model:string, Parent:entity, PAttachement:string)
+    {
+        holoPos(This, Pos)
+        holoScale(This, Scale)
+        holoAng(This, Angle)
+        holoColor(This, Color)
+        holoMaterial(This, Materials[Material, string])
+        holoModel(This, Model)
+        holoParentAttachment(This, Parent, PAttachement)
+    }
+
+    function void pOut(Color:vector, Code:string, Message:string, Sound:string)
+    {
+        printColor(vec(0), ">> [", Color, Code, vec(0), "] ", vec(255), Message)     
+        entity():soundPlay(hash(Code + Message), 2, Sound)      
+    }
+
+    function void errOut(Code:string)
+    {
+        pOut(vec(255,0,0), "Error", Code, "buttons/button8.wav") 
+    }
+
+    function void sucOut(Code:string)
+    {
+        pOut(vec(0,255,0), "Success", Code, "buttons/button9.wav")         
+    }
+
+    function void warOut(Code:string)
+    {
+        pOut(vec(255,255,0), "Warning", Code, "buttons/button4.wav")    
+    }
+     
+    function table pys()
+    {
+        return VR["players", table]   
+    } 
+    
+    function number entity:isVr()
+    {
+        return VR["players", table]:exists(This:steamID())
+    }
+
+    function void resetRealmForOutsiders()
+    {
+        if(players():count() != LastPlayers:count())
+        {
+            local Players = players()            
+            foreach(A, Player:entity = Players)
+            {
+                if(!Player:isVr())
+                {
+                    foreach(I, Index:number = HoloInfo:keys())
+                    {     
+                        local Holo   = Index
+                        local Status = HoloInfo[Index, string]       
+                        
+                        holoVisible(Holo, Player, 0)
+                    }             
+                } 
+            }   
+        
+            LastPlayers = Players
+        }
+    }
+
+    function void updateInfo()
+    {
+        if(curtime() > UpdateInfo)
+        {
+            local Name = ">> The Realm <<"
+            
+            Name = Name + "\nPlayers: " + pys():count() + "/" + MaxPlayers
+            
+            foreach(I, ID:string = pys():keys())
+            {
+                local Ply = pys()[ID, table]["info", table]["name", string]
+                Name = Name + "\n> " + Ply   
+            }
+            
+            setName(Name)
+            
+            UpdateInfo = curtime() + 0.825  
+        }
+    }
+    
+    function void override(Name:string)
+    {
+        setName(Name:upper())
+        UpdateInfo = curtime() + 2.5   
+    }
+    
+    function number entity:getHolo(Identifier:string)
+    {
+        if(!This:isVr())
+        {
+            return 0
+        }   
+        
+        return VR["players", table][This:steamID(), table]["holos", table][Identifier, number]
+    }
+
+    function number getHolo(Identifier:string)
+    {
+        if(VR["game", table]["holos", table]:exists(Identifier))
+        {
+            return VR["game", table]["holos", table][Identifier, number]   
+        }   
+        
+        return 0
+    }
+    
+    function void entity:userOnly(Index)
+    {
+        HoloInfo[Index, string] = This:steamID()     
+    }
+    
+    function void number:realmOnly()
+    {
+        HoloInfo[This, string] = "*"                 
+    }
+    
+    function void entity:showEx(Index)
+    {
+        HoloInfo[Index, string] = "!" + This:steamID()           
+    }
+
+    function void refresh()
+    {
+        RealmReload = 0
+    }
+
+    function void entity:hideRealm()
+    {
+        foreach(I, ID:string = VR["game", table]["holos", table]:keys())
+        {      
+            local Holo = VR["game", table]["holos", table][ID, number]
+            holoVisible(Holo, This, 0)
+        }
+    }
+
+    function number entity:addHolo(Identifier:string)
+    {        
+        if(!This:isVr())
+        {
+            error("Cannot add holo to invalid player.")       
+        }
+        
+        HC++
+        holoCreate(HC)
+        VR["players", table][This:steamID(), table]["holos", table][Identifier, number] = HC #:pushTable(table("id"=Identifier, "index"=HC))    
+        return HC
+    }
+
+    function number addGlobalHolo(Identifier:string)
+    {
+        HC++             
+        holoCreate(HC)
+        VR["game", table]["holos", table][Identifier, number] = HC #:pushTable(table("id"=Identifier, "index"=HC))     
+        return HC     
+    }
+    
+    function void entity:clearHolos()
+    {        
+        if(!This:isVr())
+        {
+            return   
+        }
+        
+        local Sid = This:steamID()        
+        local Holos = VR["players", table][Sid, table]["holos", table]           
+
+        foreach(I, ID:string = Holos:keys())
+        {
+            HoloInfo:remove(Holos[ID, number])
+            holoDelete(Holos[ID, number])              
+        }                     
+    }
+    
+    function void entity:removeHolo(Identifier:string)
+    {
+        if(!This:isVr())
+        {
+            return  
+        }
+        
+        local Sid = This:steamID()        
+        local Holos = VR["players", table][Sid, table]["holos", table]   
+                 
+        foreach(I, ID:string = Holos:keys())
+        {   
+            if(ID == Identifier)
+            {
+                HoloInfo:remove(Holos[ID, number])
+                holoDelete(Holos[ID, number])
+                VR["players", table][Sid, table]["holos", table]:remove(ID)
+                break
+            }   
+        }                      
+    }
+    
+    function void removeHolo(Identifier:string)
+    {        
+        foreach(I, ID:string = VR["game", table]["holos", table]:keys())
+        {      
+            if(ID == Identifier)
+            {
+                HoloInfo:remove(VR["game", table]["holos", table][ID, number])
+                holoDelete(VR["game", table]["holos", table][ID, number])
+                VR["game", table]["holos", table]:remove(ID)
+                return
+            }   
+        }           
+        
+        error("A holo with the ID: " + Identifier + " doesn't exist.")   
+    }  
+    
+    # Management
+    function void entity:playerInit()
+    {
+        local SID = This:steamID()      
+        VR["players", table][SID, table] = table()
+        VR["players", table][SID, table]["info",   table] = table("name"=This:name(),"ent"=This)
+        VR["players", table][SID, table]["holos",  table] = table()
+        VR["players", table][SID, table]["avatar", table] = table()        
+    }
+
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+    # Run all on-joining shit in here
+    function void entity:vrJoin()
+    {
+        This:playerInit()        
+        
+        local Realm = This:addHolo("pov")
+        Realm:edit(This:attachmentPos("chest"), vec(-5.5), ang(), vec(100), "view", "hqsphere", This, "chest")
+        This:userOnly(Realm)
+
+        local RealmB = This:addHolo("pov2")
+        RealmB:edit(This:attachmentPos("chest"), vec(-4), ang(), vec(100), "view", "hqsphere", This, "chest")
+        This:userOnly(RealmB)
+
+        local Avatar = This:addHolo("avatar")
+        Avatar:edit(This:pos(), vec(1), ang(), vec(120,40,120), "frame", This:model())
+        This:showEx(Avatar)
+
+        local Gun   = This:addHolo("gun")
+        Gun:edit(holoEntity(Avatar):pos() + vec(0,0,40), vec(1), ang(), vec(180,60,180), "frame", "models/weapons/w_physics.mdl", Avatar)
+        This:showEx(Gun)
+
+        refresh()
+    }
+    
+    # Run all on-leaving shit here
+    function void entity:vrLeave()
+    {
+        if(This:isValid())
+        {
+            This:hideRealm()
+            This:clearHolos()
+        }
+        
+        VR["players", table]:remove(This:steamID())  
+        
+        refresh()  
+    }    
+
+    # Run all world related shit in here
+    function void vrWorld()
+    {
+        
+    }
+    
+    # Run all player related shit in here
+    function void vrSession(PlayerData:table)
+    {
+        local Ent    = PlayerData["info", table]["ent",  entity]
+        local Name   = PlayerData["info", table]["name", string]   
+        local Holos  = PlayerData["holos", table] 
+        
+        local Body   = Ent:getHolo("avatar")
+        
+        holoPos(Body, Ent:pos())
+        holoAng(Body, ang(0,Ent:eyeAngles():yaw(), 0))
+    }
+
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+     
+    local E2 = addGlobalHolo("e2")
+    holoPos(E2, E:toWorld(vec()))
+    holoAng(E2, E:angles())
+    holoColor(E2, vec(0,255,0))
+    holoParent(E2, E)
+    holoMaterial(E2, Materials["frame", string])
+    holoModel(E2, E:model())   
+    E2:realmOnly()
+    
+    resetRealmForOutsiders()
+}
+
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+# [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] #
+
+if(curtime() > RealmReload)
+{
+    local Players = players()
+    
+    foreach(I, Index:number = HoloInfo:keys())
+    {     
+        local Holo   = Index
+        local Status = HoloInfo[Index, string]
+        foreach(P, Player:entity = Players)
+        {          
+            if(!Player:isVr())
+            {
+                holoVisible(Holo, Player, 0)
+                continue   
+            }
+
+            if(Status == "*")
+            {
+                holoVisible(Holo, Player, 1)                
+            }
+            elseif(Status:index(1) == "!")
+            {
+                local Exception = Status:sub(2, Status:length())
+                holoVisible(Holo, Player, Exception != Player:steamID())      
+            }
+            elseif(Status:index(1):lower() == "s")
+            {
+                holoVisible(Holo, Player, Status == Player:steamID())                              
+            }
+            else
+            {
+                error("Unknown Status (" + Status + ") for holo: " + Holo)  
+            }
+        }
+    }   
+    
+    RealmReload = curtime() + 2
+    
+    resetRealmForOutsiders()
+}
+
+foreach(I, Player:entity = players())
+{
+    if(curtime() < JoinDelay | !holoCanCreate())
+    {
+        if(!holoCanCreate())
+        {
+            override("Please wait a moment before joining.") 
+            Player:soundPlay(Player:steamID(), 1, "buttons/button10.wav")   
+        }
+        
+        break   
+    }
+
+    if(Player:aimEntity() != E | !Player:isValid())
+    {
+        continue      
+    }
+    
+    if(Player:keyUse())
+    {        
+        if(!Player:isVr())
+        {
+            if(pys():count() >= MaxPlayers)
+            {
+                Player:soundPlay(Player:steamID(), 1, "buttons/button10.wav")
+                override("Playerlimit reached!")
+                continue   
+            } 
+            
+            Player:soundPlay(Player:steamID(), 1, "buttons/button9.wav")
+            Player:vrJoin()    
+        }
+        else
+        {
+            Player:soundPlay(Player:steamID(), 1, "buttons/button18.wav")
+            Player:vrLeave()         
+        }    
+        
+        JoinDelay = curtime() + 0.75
+    }
+}
+
+foreach(I, Sid:string = VR["players", table]:keys())
+{
+    local Data = pys()[Sid, table]
+    
+    if(!Data["info", table]["ent", entity]:isValid())
+    {
+        VR["players", table]:remove(Sid)
+        continue   
+    }   
+    
+    vrSession(Data)           
+}
+
+if(pys():count())
+{
+    vrWorld()
+}
+
+updateInfo()
