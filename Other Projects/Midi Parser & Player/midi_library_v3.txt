@@ -134,6 +134,8 @@ if( first() )
     {
         # Map = https://www.midi.org/specifications/item/gm-level-1-sound-set
         
+      #  return "piano"
+        
         local P = Program + 1
         if(P <= 8)
         {
@@ -147,7 +149,7 @@ if( first() )
         
         if(P <= 16)
         {
-            return "wowozela/samples/dingdong.wav"
+      #      return "wowozela/samples/dingdong.wav"
             # Chromatic Percussion   
         }
         
@@ -265,6 +267,9 @@ if( first() )
 
     function string getInstrument(Value:string)
     {     
+        return "piano"
+        
+        #[
         foreach(I, Key:number = PlayablePianoBank:keys())
         {
             local Instr = PlayablePianoBank[Key, string]     
@@ -281,8 +286,7 @@ if( first() )
                 return VanillaBank[Key, string]     
             }         
         }
-        
-        return "piano"
+        ]#
     }
 
     function string getPPianoNote(Note)

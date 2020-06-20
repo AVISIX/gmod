@@ -1,7 +1,7 @@
 @name Midiplayer v5
 
 # [ Config ] #
-@persist Speed HoloCount OpsLimit Loop [Version LastUpdate]:string PowerSaving
+@persist Speed HoloCount OpsLimit Loop [Version LastUpdate]:string PowerSaving TimeMult
 
 # [ General & Misc ] #
 @persist [Mode PrevMode]:string HoloC [Status ]:table HoloY HoloX ChannelC
@@ -14,8 +14,6 @@
 @persist [Midi Directory]:string 
 @persist [Notes Data Counters Timetracker AltSounds]:table
 @persist [ AvSpeakers Instruments  ]:array
-
-#@model models/props_lab/reciever01b.mdl
 
 @trigger all
 
@@ -45,10 +43,11 @@ if(first())
     HoloCount     = 150
     OpsLimit      = 6000
     PowerSaving   = 0
+    TimeMult      = 1
     
     runOnChat(1)
     runOnFile(1)
-    #ifdef runOnHTTP(1)
+    #ifdef runOnHTTP(number)
     runOnHTTP(1)
     #endif
     runOnTick(1)  
@@ -135,6 +134,14 @@ if(first())
         return 0
     }
 
+    function string formatTime(Time)
+    {
+        local Minutes = floor(Time / 60)
+        local Seconds = floor(Time % 60)
+        
+        return Minutes + "m " + Seconds + "s"
+    }
+
     function void updateStatus()
     {
         if(realtime() > ProgLast)
@@ -192,10 +199,17 @@ if(first())
             {
                 Name = Name + "\n\nStatus: " + Status["status", string]   
             }
-    
-            if(Status["progress", number] > 0)
+            
+            if(!IsPlaying)
             {
-                Name = Name + "\nProgress: " + Status["progress", number] + "%"
+                if(Status["progress", number] > 0)
+                {
+                    Name = Name + "\nProgress: " + Status["progress", number] + "%"
+                }
+            }
+            else
+            {
+                Name = Name + "\n" + formatTime(Status["progress", number]) + " / " + formatTime(Playtime)
             }
             
             if(Loop)
@@ -409,7 +423,8 @@ if(first())
         local Play = told("/play")
         local Save = told("/save")
         local SSP  = told("/speed")
-
+        local STS  = told("/time")
+        
         if(Play)
         {
             playback(Play)
@@ -452,6 +467,11 @@ if(first())
         {
             Loop = !Loop
             sucOut("Looping has been toggled to: " + bool(Loop))   
+        }
+        elseif(STS)
+        {
+            TimeMult = STS:toNumber()
+            sucOut("Time multiplier adjusted to: " + TimeMult)   
         }
     }
 
@@ -663,7 +683,7 @@ if(first())
                 local Event  = Events[Counters[I, number], table]
                 local Timing = Event["timing", number] 
                 
-                local LimitReached = realtime() >= StartTime + Timing 
+                local LimitReached = (realtime() - StartTime) * TimeMult >= Timing 
                 
                 if(LimitReached)
                 {
@@ -683,7 +703,8 @@ if(first())
                         stopNote(Note, Chan)                              
                     }
                     elseif(Type == "Pitch Blend")
-                    {                        
+                    {        
+                        #[                
                         local Blend = Event["increase", number]                 
                         
                         for(I = 1, Notes:count())
@@ -694,7 +715,8 @@ if(first())
                             {
                                 soundPitch(NData["sid", number], clamp(NData["pitch", number] * (Blend), 1, 255))
                             }                            
-                        }                        
+                        }            
+                        ]#            
                     }
                     elseif(Type == "Aftertouch")
                     {
@@ -715,9 +737,9 @@ if(first())
                 }
             }
             
-            Status["progress", number] = clamp(ceil((100 / Playtime) * (realtime() - StartTime), 1),0,100)           
+            Status["progress", number] = (realtime() - StartTime) * TimeMult #clamp(ceil((100 / Playtime) * ((realtime() - StartTime) * TimeMult), 1),0,100)           
              
-            if(realtime() >= StartTime + Playtime)
+            if((realtime() - StartTime) * TimeMult >= Playtime)
             {
                 IsPlaying = 0 
                 NoteCounter = 1
@@ -806,5 +828,4 @@ if(Mode != "init")
 {
     chatCommands()   
 }
-
 
