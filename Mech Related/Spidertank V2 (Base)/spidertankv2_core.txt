@@ -28,6 +28,13 @@
 
 @model models/hunter/blocks/cube05x05x05.mdl
 
+#[
+    This code was written by Sixmax (STEAM_0:0:104139026).
+    
+    You may use this in your projects but not claim it as yours (Check License: https://github.com/Sixmax/gmod/blob/master/license.txt)
+    Abuse may cause an inconvenience on your and my side. So please respect my work and follow the licensing.
+]#
+
 # [ --- Global Variables --- ] #
 EPos  = E:pos()
 EVel  = E:vel()
@@ -40,7 +47,7 @@ if(first())
     NoVec = vec() 
     NoAng = ang()
     
-    setName("Karen")
+    setName("Sixmax' Spidertank Base V2")
     
     #[ [ --- To Do --- ] 
 
@@ -795,12 +802,12 @@ if(first())
         
         local LDir = vec(0,0,-1)
         
-        local L1R = array(bec(115,85,HoverHeight   / TDiv) * Inc, bec(110,80,-HoverHeight * 1.75) * Inc, bec(80,50,-HoverHeight * 2) * Inc, bec(60,30,-HoverHeight * 2.75) * Inc)
-        local L2R = array(bec(115,-85,HoverHeight  / TDiv) * Inc, bec(110,-80,-HoverHeight * 1.75) * Inc, bec(80,-50,-HoverHeight * 2) * Inc, bec(60,-30,-HoverHeight * 2.75) * Inc)
-        local L3R = array(bec(-115,85,HoverHeight  / TDiv) * Inc, bec(-110,80,-HoverHeight * 1.75) * Inc, bec(-80,50,-HoverHeight * 2) * Inc, bec(-60,30,-HoverHeight * 2.75) * Inc)
-        local L4R = array(bec(-115,-85,HoverHeight / TDiv) * Inc, bec(-110,-80,-HoverHeight * 1.75) * Inc, bec(-80,-50,-HoverHeight * 2) * Inc, bec(-60,-30,-HoverHeight * 2.75) * Inc)
-        local L5R = array(bec(0,-115,HoverHeight   / TDiv) * Inc, bec(0,-110,-HoverHeight * 1.75) * Inc, bec(0,-80,-HoverHeight * 2) * Inc, bec(0,-60,-HoverHeight * 2.75) * Inc)
-        local L6R = array(bec(0,115,HoverHeight    / TDiv) * Inc, bec(0,110,-HoverHeight * 1.75) * Inc, bec(0,80,-HoverHeight * 2) * Inc, bec(0,60,-HoverHeight * 2.75) * Inc)
+        local L1R = array(bec(115,85,HoverHeight   / TDiv) * Inc, bec(120,90,-HoverHeight * 1.75) * Inc, bec(80,50,-HoverHeight * 2) * Inc, bec(50,20,-HoverHeight * 2.75) * Inc)
+        local L2R = array(bec(115,-85,HoverHeight  / TDiv) * Inc, bec(120,-90,-HoverHeight * 1.75) * Inc, bec(80,-50,-HoverHeight * 2) * Inc, bec(50,-20,-HoverHeight * 2.75) * Inc)
+        local L3R = array(bec(-115,85,HoverHeight  / TDiv) * Inc, bec(-120,90,-HoverHeight * 1.75) * Inc, bec(-80,50,-HoverHeight * 2) * Inc, bec(-50,20,-HoverHeight * 2.75) * Inc)
+        local L4R = array(bec(-115,-85,HoverHeight / TDiv) * Inc, bec(-120,-90,-HoverHeight * 1.75) * Inc, bec(-80,-50,-HoverHeight * 2) * Inc, bec(-50,-20,-HoverHeight * 2.75) * Inc)
+        local L5R = array(bec(0,-115,HoverHeight   / TDiv) * Inc, bec(0,-120,-HoverHeight * 1.75) * Inc, bec(0,-80,-HoverHeight * 2) * Inc, bec(0,-40,-HoverHeight * 2.75) * Inc)
+        local L6R = array(bec(0,115,HoverHeight    / TDiv) * Inc, bec(0,120,-HoverHeight * 1.75) * Inc, bec(0,80,-HoverHeight * 2) * Inc, bec(0,40,-HoverHeight * 2.75) * Inc)
         
         local SwitchCycle = 0
         
