@@ -306,6 +306,31 @@ if(first())
         return R
     }
 
+    function string lookupUntilEndOfPP()
+    {
+        local R = ""
+        
+        for(I = Buffer, inf())
+        {
+            local C = E2:index(I)
+            local P = notCrashing()
+            if(C == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("lookupUntilEndOfPP loop closed due to missing OPS.")   
+                }  
+                break      
+            }   
+            elseif(C == " " | C == "\n")
+            {
+                break   
+            }
+            R += C
+        }
+        return R
+    }
+
     function string readUntilUpper()
     {
         local R = ""
@@ -539,12 +564,16 @@ if(first())
                     {
                         if(getPrev() != "]")
                         {
-                            local Lookup = lookupUntil(" ")
+                            local Lookup = lookupUntilEndOfPP()
 
                             if(Lookup == "#ifdef" | Lookup == "#endif" | Lookup == "#else")
-                            {
+                            {                            
                                 event("ppcommand", Lookup)
                                 Buffer += Lookup:length()
+                                if((Lookup == "#endif" | Lookup == "#else") & readCur() != " ")
+                                {
+                                    nextLine()   
+                                }
                             }
                             else
                             {

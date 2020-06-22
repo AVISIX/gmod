@@ -185,12 +185,12 @@ if(FileParsed)
                         case "userfunction",
                             UserFunctionsText += Text 
                             
-                            TypesText     += Spaced
-                            CommentsText  += Spaced
-                            VariablesText += Spaced
-                            DefaultText   += Spaced
-                            PreprocText   += Spaced
-                            KeywordsText  += Spaced  
+                            TypesText        += Spaced
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced  
                             FunctionsText    += Spaced    
                             StringsText      += Spaced   
                             NumbersText      += Spaced 
