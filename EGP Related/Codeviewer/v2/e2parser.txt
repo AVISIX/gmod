@@ -1,0 +1,789 @@
+@name E2Parser
+
+# [ --- Config --- ] #
+@persist CPULimit
+
+# [ --- Parser --- ] #
+@persist [E2Result PrevEvent UserFunctions]:table
+@persist Parsing Buffer InComment InString BufferInLine
+@persist [E2 Builder]:string
+@persist [E2Chars E2Lines]:array
+ 
+# [ --- Debug --- ] #
+@persist E2Imported E2Importing E2DebugDone
+
+if(first())
+{       
+    CPULimit = 5000
+    
+    # [ --- Misc Helpers --- ] #
+    function number notCrashing()
+    {
+        if(!perf())
+        {
+            return 0
+        }
+        
+        return 1
+    }
+    
+    function void warning(Output:string)
+    {
+        printColor(vec(255), "[",vec(255,255,0), "Warning", vec(255), "] ", vec(255,0,0), Output)    
+    }
+
+    function number string:isUpper()
+    {
+        local B = toByte(This)        
+        if(B >= 65 & B <= 90){ return 1 }            
+        return 0
+    }
+    
+    function number string:isLower()
+    {
+        local B = toByte(This)        
+        if(B >= 97 & B <= 122){ return 1 }            
+        return 0        
+    }
+    
+    function number string:isLetter()
+    {
+        if(This:isLower() | This:isUpper()){ return 1 }                  
+        return 0        
+    }
+    
+    function number string:isNumber()
+    {
+        local B = toByte(This)     
+        if(B >= 48 & B <= 57){ return 1 }                
+        return 0   
+    }
+ 
+    function number string:isSpecial()
+    {
+        if(!This:isLetter() & !This:isNumber()){ return 1 }           
+        return 0
+    }
+
+    function number string:isWhitespace()
+    {
+        if(This:replaceRE("%s", "") == ""){ return 1 }               
+        return 0      
+    }
+    
+    function string string:last()
+    {
+        return This:index(This:length())   
+    }
+        
+    # [ --- Parser Helpers --- ] #
+    function void e2Reset()
+    {
+        E2Result = table()
+        Parsing = 0   
+    }
+    
+    function void nextLine()
+    {
+        BufferInLine = 0
+        E2Result["lines", table][E2Result["lines",table]:count() + 1, table] = table()       
+    }
+    
+    function string readCur()
+    {
+        return E2:index(Buffer)   
+    }
+    
+    function string readNext()
+    {
+        Buffer++
+        BufferInLine++
+        return readCur()    
+    }
+    
+    function string readLen(N)
+    {
+        local R = ""
+        for(I = Buffer, N)
+        {
+            R += readNext()   
+        }
+        return R      
+    }
+    
+    function string getNext()
+    {
+        return E2:index(Buffer + 1)   
+    }
+    
+    function string getPrev()
+    {
+        return E2:index(Buffer - 1)   
+    }
+
+    function string readUntilNonNumber()
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilNonNumber loop closed due to missing OPS.")   
+                }   
+                break   
+            }   
+            local C = readNext()
+            if(C:isSpecial() & (C != "." | C != "x"))
+            {
+                break   
+            }
+            R += C
+        }   
+        return R           
+    }
+    
+    function string readUntilNonEnum()
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilNonEnum loop closed due to missing OPS.")   
+                }   
+                break   
+            }   
+            local C = readNext()
+            if(C:isSpecial() & C != "_")
+            {
+                break   
+            }
+            R += C
+        }   
+        return R                 
+    }
+    
+    function string readUntilChar(Char:string)
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilChar(" + (Char == "\n" ? "\\n" : Char) + ") loop closed due to missing OPS.")   
+                }   
+                break   
+            }     
+            local C = readNext()
+            if(C == Char)
+            {
+                break   
+            }
+            R += C
+        }   
+        return R
+    }
+    
+    function string readUntilEndOfLine()
+    {
+        local R = ""
+        for(I = Buffer, 9999)
+        {
+            local N = readNext()
+            if(N == "\n")
+            {
+                break      
+            }        
+            R += N 
+        }
+        return R
+    }
+    
+    function string readUntilSpecial()
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilSpecial loop closed due to missing OPS.")   
+                }   
+                break   
+            }      
+            local C = readNext()
+            if(C:isSpecial())
+            {
+                break   
+            }
+            R += C
+        }   
+        return R           
+    }
+    
+    function string readUntilLower()
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilLower loop closed due to missing OPS.")   
+                }   
+                break   
+            } 
+            local C = readNext()
+            if(C:isLower())
+            {
+                break   
+            }
+            R += C
+        }   
+        return R           
+    }        
+
+    function string lookupUntil(Char:string)
+    {
+        local R = ""
+        
+        for(I = Buffer, inf())
+        {
+            local C = E2:index(I)
+            local P = notCrashing()
+            if(C == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("lookupUntil loop closed due to missing OPS.")   
+                }  
+                break      
+            }   
+            elseif(C == Char)
+            {
+                break   
+            }
+            R += C
+        }
+        return R
+    }
+
+    function string readUntilUpper()
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilUpper loop closed due to missing OPS.")   
+                }   
+                break   
+            }  
+            local C = readNext()
+            if(C:isUpper())
+            {
+                break   
+            }
+            R += C
+        }   
+        return R           
+    }    
+    
+    function string readUntilText(Text:string)
+    {
+        local R = ""
+        local TL = Text:length()
+        for(I = Buffer, inf())
+        {
+            local XX = readNext() 
+            if(!notCrashing() | XX == "\n")
+            {
+                break   
+            }
+            if(E2:sub(Buffer, Buffer + TL - 1) == Text)
+            {
+                R += Text
+                break   
+            }    
+            R += XX
+        }
+        return R
+    }
+    
+    # [ --- Main Functions --- ] #
+    function table prevEvent()
+    {
+        return PrevEvent   
+    }    
+    
+    function void event([Type Text]:string)
+    {
+        local T = (Type == "" ? "unknown" : Type)
+        
+        if(T == "unknown" & (Text == "" | Text == "\n"))
+        {
+            #return    
+        } 
+        
+        local Event = table(
+                        "type" = T, 
+                        "text" = Text
+                    )
+                    
+        E2Result["lines", table][E2Result["lines", table]:count(), table]:pushTable(Event)
+        
+        Builder   = ""
+        PrevEvent = Event
+    }
+    
+    function table getPrevEvent(N)
+    {
+        local Events = E2Result["lines", table][E2Result["lines", table]:count(), table]
+        return Events[Events:count() - N, table]    
+    }
+    
+    function void string:parseE2()
+    {
+        if(!Parsing)
+        {
+            E2       = This   
+            E2Chars  = E2:explode("")
+            E2Lines  = E2:explode("\n")
+            Buffer   = 0
+            E2Result = table("lines"=table(1=table()))              
+            Parsing  = 1
+        }
+        else
+        {
+            while(perf(66.66) & cpuUsage() < CPULimit)
+            {
+                local C = readNext()
+                
+                # [ --- Loop Breaker --- ] #
+                if(Buffer >= E2Chars:count())
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    Parsing = 0
+                    break   
+                }     
+                # [ -------------------- ] #
+                
+                                
+                # [ --- Multiline handling --- ] #
+                if(InComment | InString)
+                {                    
+                    if(InComment)
+                    {
+                        if(C == "#" & getPrev() == "]")
+                        {
+                            event("comment", Builder + C)
+                            InComment = 0   
+                            continue       
+                        }
+                        elseif(C == "\n")
+                        {
+                            if(Builder != "")
+                            {
+                                event("comment", Builder)
+                            }
+                            nextLine()
+                            continue
+                        }           
+                    }
+                    else
+                    {
+                        if(C == "\"")
+                        {
+                            event("string", Builder + C)
+                            InString = 0   
+                            continue                               
+                        }
+                        elseif(C == "\n")
+                        {
+                            if(Builder != "")
+                            {
+                                event("string", Builder)
+                            }
+                            nextLine()
+                            continue
+                        }
+                    }         
+                           
+                    Builder += C
+                    continue   
+                }
+                # [ -------------------------- ] #
+
+
+                # [ --- Anti-Gay --- ] #
+                if(C == "\n")
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    nextLine()              
+                    continue
+                }
+                # [ ---------------- ] #
+                
+                
+                # [ --- Preprocessor --- ] #
+                if(C == "@" & (getPrev() == "\n" | Buffer == 1))
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    local Rest = readUntilChar(" ")
+                    
+                    switch(Rest)
+                    {
+                        case "name",
+                        if(1)
+                        {
+                            local Line = readUntilEndOfLine() # readUntilChar("\n")
+                            event("preproc", "@" + Rest + (Line != "" ? " " + Line : ""))  
+                            nextLine()
+                        }
+                        break
+                        
+                        case "trigger",
+                        if(1)
+                        {
+                            local Line = readUntilEndOfLine()
+                            event("preproc", "@" + Rest + (Line != "" ? " " + Line : ""))  
+                            nextLine()
+                        }                        
+                        break
+
+                        case "model",
+                        if(1)
+                        {
+                            local Line = readUntilEndOfLine()
+                            event("preproc", "@" + Rest + (Line != "" ? " " + " " + Line : "")) 
+                            nextLine() 
+                        }                        
+                        break                        
+                        
+                        default,
+                        event("preproc", "@" + Rest)
+                        
+                        if(readCur() == Rest:last())
+                        {
+                            continue   
+                        }
+
+                        Builder += readCur()
+                        break   
+                    }
+                }
+                
+                # [ --- Comments & PPCommands --- ] #
+                elseif(C == "#")
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    Builder += C
+                    
+                    if(getNext() != "[")
+                    {
+                        if(getPrev() != "]")
+                        {
+                            local Lookup = lookupUntil(" ")
+
+                            if(Lookup == "#ifdef" | Lookup == "#endif" | Lookup == "#else")
+                            {
+                                event("ppcommand", Lookup)
+                                Buffer += Lookup:length()
+                            }
+                            else
+                            {
+                                local Line = readUntilEndOfLine()
+                                event("comment", "#" + Line) 
+                              #  nextLine()
+                            } 
+                        }
+                    }      
+                    else
+                    {   
+                        InComment = 1
+                    }
+
+                    if(readCur() == Builder:last())
+                    {
+                        continue   
+                    }
+
+                    Builder += readCur()
+                }
+                
+                # [ --- Strings --- ] #
+                elseif(C == "\"")
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+
+                    Builder += C
+                    InString = 1   
+                }
+                
+                # [ --- Variables --- ] #
+                elseif(C:isUpper() & (getPrev():isSpecial()))
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    Builder += C
+                    
+                    local Variable = C + readUntilSpecial()
+                    
+                    event("variable", Variable)     
+
+                    if(readCur() == Variable:last())
+                    {
+                        continue   
+                    }
+                    
+                    Builder += readCur()
+                }
+                
+                # [ --- Functions, UserFunctions & Types --- ] #
+                elseif(C:isLower() & (getPrev():isSpecial()))
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    Builder += C
+                    
+                    local Unknown = C + readUntilSpecial()
+                    
+                    local IsKeyword = 0                    
+                    foreach(I, Keyword:string = array("function", "continue", "foreach", "default", "elseif", "return", "local", "break", "switch", "while", "case", "else", "for", "if"))
+                    {
+                        if(Unknown == Keyword)
+                        {
+                            IsKeyword = 1
+                            break   
+                        }   
+                    }
+                    
+                    if(IsKeyword)
+                    { 
+                        event("keyword", Unknown)
+                    }
+                    else
+                    {   
+                        local CheckA = (getPrevEvent(3)["type", string] == "keyword" & getPrevEvent(3)["text", string] == "function")
+                        local CheckB = (getPrevEvent(1)["type", string] == "keyword" & getPrevEvent(1)["text", string] == "function") & readCur() != " "
+                        
+                        if(CheckA | CheckB | UserFunctions:exists(Unknown))
+                        {
+                            event("userfunction", Unknown)
+                            UserFunctions[Unknown, number] = 0 # fucking e2 only able to check if keys exist smh
+                        }
+                        else
+                        {                  
+                            if(readCur() == "(" | getPrevEvent(0)["text", string] == "(")
+                            {
+                                event("function", Unknown)   
+                            }                    
+                            elseif(readCur() == "]" | readCur() == " " | readCur() == "" | readCur() == ")" | readCur() == "," | getNext() == "\n")
+                            {
+                                event("type", Unknown)   
+                            }    
+                        } 
+                    }                        
+
+                    if(readCur() == Unknown:last())
+                    {
+                        continue   
+                    }
+                    
+                    Builder += readCur()
+                }
+                
+                # [ --- Numbers --- ] #
+                elseif(C:isNumber())
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    Builder += C
+              
+                    local Number = C + readUntilNonNumber()     
+                    
+                    event("number", Number)
+                    
+                    if(readCur() == Number:last())
+                    {
+                        continue   
+                    }
+                    
+                    Builder += readCur()            
+                }
+                
+                # [ --- Enums --- ] #
+                elseif(C == "_" & getPrev():isSpecial())
+                {
+                    if(Builder != "")
+                    {
+                        event("", Builder)   
+                    }
+                    
+                    Builder += C
+
+                    local Enum = C + readUntilNonEnum()
+                    
+                    event("enum", Enum)
+
+                    if(readCur() == Enum:last())
+                    {
+                        continue   
+                    }
+                    
+                    Builder += readCur()  
+                }
+                
+                # [ ---  Unknown, Bugged or Unhandled Stuff --- ] #
+                else
+                {
+                    Builder += C                                                           
+                }                 
+            }              
+        }           
+    }   
+    
+    function number e2Done()
+    {
+        return Parsing == 0 & Buffer >= E2Chars:count()   
+    }
+    
+    function number e2Progress()
+    {
+        return round((100 / E2Chars:count()) * Buffer, 1)
+    }
+    
+    function table e2Result()
+    {
+        return E2Result   
+    }
+    
+    function void e2Reset()
+    {
+        Builder       = ""
+        E2Result      = table()
+        E2Chars       = array()
+        E2Lines       = array() 
+        UserFunctions = table()
+        PrevEvent     = table()
+        Parsing       = 0   
+        Buffer        = 0
+        InComment     = 0
+        InString      = 0
+        E2            = ""
+    }
+    
+    function void e2LibDebug(File:string)
+    {
+        if(!E2Imported)
+        {
+            runOnFile(1)
+            runOnTick(1)
+          
+            if(!E2Importing & fileCanLoad())
+            {
+                fileLoad(File)
+                E2Importing = 1   
+            }
+            else
+            {
+                if(fileClk() & !fileLoading())
+                {
+                    if(fileStatus() == _FILE_OK)
+                    {
+                        E2Importing = 0     
+                        E2Imported  = 1 
+                        
+                        hint("Loaded", 3)
+                    }   
+                    else
+                    {           
+                        E2Importing = 0    
+                        E2Imported  = 1
+                    }
+                }   
+            }  
+        }
+        else
+        {
+            if(!E2DebugDone)
+            {
+                fileRead():parseE2()
+                setName("Prog: " + e2Progress() + "%\nLine Progress: " + BufferInLine)
+                E2DebugDone = e2Done()
+            } 
+                  
+            if(changed(E2DebugDone) & E2DebugDone)
+            {    
+                E2Importing = 0
+                E2Imported  = 0
+                
+                #[
+                foreach(I, Key:number = E2Result["lines", table]:keys())
+                {
+                    if(I > 5)
+                    {
+                        break   
+                    }
+
+                    printTable(E2Result["lines", table][Key, table])
+                }
+                ]#
+                
+                printTable(E2Result)
+            
+                print(E2Result["lines", table]:count())
+            
+                runOnFile(0)
+                runOnTick(0)
+            }
+        }        
+    }      
+}
+
+#e2LibDebug(">e2shared/parsertest.txt")
+#e2LibDebug(">e2shared/midi_library.txt")
+#e2LibDebug(">e2shared/base64.txt")
