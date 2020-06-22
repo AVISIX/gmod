@@ -1,0 +1,404 @@
+@name Codeviewer - V2
+
+# [ --- Config --- ] #
+@persist CVConfig:table
+
+# [ --- Globals --- ] #
+@persist [Mode PrevMode CurrentFile FileContents]:string
+@persist EGP:wirelink
+@persist [E]:entity
+@persist [E2Events E2Data]:table
+
+# [ --- File Loader --- ] #
+@persist FileLoading
+
+# [ --- Parser & Combiner --- ] #
+@persist E2Parsed E2Combined 
+
+# [ --- Visualizer --- ] #
+@persist VLoading VLineCounter VDone 
+@persist [PreprocText CommentsText StringsText KeywordsText VariablesText TypesText NumbersText UserFunctionsText FunctionsText EnumsText PPCommandsText DefaultText]:string
+
+
+if(first())
+{   
+    E = entity()
+    
+    setName("Codeviewer - V2")
+    
+    runOnTick(1)
+    runOnChat(1)
+    runOnLast(1)
+    runOnFile(1)
+    
+    # [ --- Config --- ] #        
+    CVConfig = table(
+        "chatprefix" = "/",
+        
+        "font"       = "Courier New",
+        "fontsize"   = 13,
+        
+        "colors" = table(
+            "preproc"      = vec(240,240,160),
+            "variable"     = vec(160, 240, 160),            
+            "comment"      = vec(128),
+            "string"       = vec(150,150,150),
+            "enum"         = vec(240,160,240),
+            "type"         = vec(240,160,96),
+            "keyword"      = vec(160,240,240),
+            "number"       = vec(247,167,167),            
+            "function"     = vec(160,160,240),
+            "ppcommand"    = vec(240,160,240),
+            "userfunction" = vec(102,122,102),
+            "unknown"      = vec(255)
+        )
+    )
+        
+    # [ --- Misc --- ] #
+    #include "libraries/e2parser"
+   
+    function void setMode(NewMode:string)
+    {
+        PrevMode = Mode
+        Mode = NewMode   
+    }    
+   
+    setMode("init")
+
+    function string onArgsChat(Command:string)
+    {
+        if(chatClk(owner()))
+        {
+            local Cmd = CVConfig["chatprefix", string] + Command
+                 
+            local Said = owner():lastSaid()
+            
+            if(Said:sub(1, Cmd:length()) == Cmd)
+            {
+                hideChat(1)
+                
+                return Said:sub(Cmd:length() + 2, Said:length())
+            }
+        }
+        
+        return ""
+    }  
+    
+    function number onChat(Command:string)
+    {
+        if(chatClk(owner()))
+        {
+            local Cmd = CVConfig["chatprefix", string] + Command
+            
+            local Said = owner():lastSaid()
+            
+            if(Said:sub(1, Cmd:length()) == Cmd)
+            {
+                hideChat(1)
+                
+                return 1   
+            }    
+        }
+        
+        return 0   
+    }
+   
+    function string loadFile(Path:string)
+    {
+        if(!FileLoading)
+        {
+            if(fileCanLoad())
+            {
+                fileLoad(Path)   
+                FileLoading = 1
+            }
+        }
+        else
+        {
+            if(fileLoaded() & !fileLoading())
+            {
+                FileLoading = 0
+                
+                if(fileStatus() == _FILE_OK)
+                {                    
+                    return fileRead()
+                }
+                else
+                {
+                    return "error"   
+                }
+            }
+        }
+        
+        return ""
+    }
+
+    function void pOut(Color:vector, Code:string, Message:string, Sound:string)
+    {
+        printColor(vec(0), ">> [", Color, Code, vec(0), "] ", vec(255), Message)     
+        entity():soundPlay(hash(Code + Message), 2, Sound)      
+    }
+
+    function void errOut(Code:string)
+    {
+        pOut(vec(255,0,0), "Error", Code, "buttons/button8.wav") 
+    }
+
+    function void sucOut(Code:string)
+    {
+        pOut(vec(0,255,0), "Success", Code, "buttons/button9.wav")         
+    }
+
+    function void warOut(Code:string)
+    {
+        pOut(vec(255,255,0), "Warning", Code, "buttons/button4.wav")    
+    }
+
+    function void addSyntax(Index, FontSize, Text:string, Color:vector)
+    {
+        if(!EGP:egpHasObject(Index))
+        {
+            EGP:egpTextLayout(Index, Text, vec2(0,0), vec2(9999, 9999)) 
+        }   
+        else
+        {
+            EGP:egpSetText(Index, Text)    
+        }
+         
+        EGP:egpColor(Index, Color)
+        EGP:egpSize(Index, FontSize)
+        EGP:egpFont(Index, "Courier New")                                            
+    }
+
+    function void resetText()
+    {
+        for(I = 1, 12)
+        {
+            if(EGP:egpHasObject(I))
+            {
+                EGP:egpSetText(I, "")
+            }   
+            else
+            {
+                addSyntax(I, 1, "", vec())          
+            }           
+        }
+    }
+
+    function number table:visualize([Start End]:number)
+    {
+        if(!VLoading & VDone)
+        {
+            VLoading = 1
+            VDone    = 0
+            
+            VLineCounter = Start
+            
+            resetText()
+            
+            CommentsText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
+        }
+        else
+        {         
+            if(!VDone)
+            {                   
+                local Limit = This:count()
+                
+                while(perf())
+                {
+                    local Data = This[VLineCounter, table]
+            
+                    PreprocText       += Data["preproc",      string] + "\n"                       
+                    DefaultText       += Data["unknown",      string] + "\n"
+                    CommentsText      += Data["comment",      string] + "\n"
+                    StringsText       += Data["string",       string] + "\n"
+                    EnumsText         += Data["enum",         string] + "\n"
+                    TypesText         += Data["type",         string] + "\n"
+                    KeywordsText      += Data["keyword",      string] + "\n"
+                    NumbersText       += Data["number",       string] + "\n"
+                    FunctionsText     += Data["function",     string] + "\n"
+                    PPCommandsText    += Data["ppcommand",    string] + "\n"
+                    UserFunctionsText += Data["userfunction", string] + "\n"
+                    VariablesText     += Data["variable",     string] + "\n"
+                
+                    VLineCounter++
+                    
+                    if(VLineCounter > End)
+                    {
+                        VDone = 1
+                        break   
+                    }
+                }     
+            }   
+            else
+            {
+                local FS = CVConfig["fontsize", number]
+                local Colors = CVConfig["colors", table]
+        
+                addSyntax(1,  FS, PPCommandsText,    Colors["ppcommand", vector])       
+                addSyntax(2,  FS, NumbersText,       Colors["number", vector])
+                addSyntax(3,  FS, EnumsText,         Colors["enum", vector])        
+                addSyntax(4,  FS, TypesText,         Colors["type", vector])
+                addSyntax(5,  FS, FunctionsText,     Colors["function", vector])
+                addSyntax(6,  FS, UserFunctionsText, Colors["userfunction", vector])
+                addSyntax(7,  FS, CommentsText,      Colors["comment", vector])        
+                addSyntax(8,  FS, PreprocText,       Colors["preproc", vector])
+                addSyntax(9,  FS, VariablesText,     Colors["variable", vector])
+                addSyntax(10, FS, KeywordsText,      Colors["keyword", vector])
+                addSyntax(11, FS, StringsText,       Colors["string", vector])
+                addSyntax(12, FS, DefaultText,       Colors["unknown", vector])   
+                
+                VLoading = 0
+                
+                return 1                 
+            }            
+        }
+        
+        return 0         
+    }
+     
+    # [ ---  Modes --- ] #
+    function void dump()
+    {
+        E2Parsing = E2Combining = VLoading = VLineCounter = E2Combined = E2Parsed = 0
+        VDone = 1
+        
+        FileContents = CurrentFile = ""
+        
+        E2Data = E2Events = table()
+        
+        resetText()
+        
+        e2Reset()   
+        combineReset()
+    }
+ 
+    function void init()
+    {
+        local Parent = E:isWeldedTo()
+        if(Parent:type() == "gmod_wire_egp")
+        {
+            EGP = Parent:wirelink()        
+        }
+        else
+        {
+            error("Not placed on EGP-Screen")   
+        }
+           
+        EGP:egpClear()        
+        dump()       
+        setMode("idle")    
+    }
+    
+    function void idle()
+    {
+        local Open = onArgsChat("open")
+        if(Open)
+        {
+            dump()
+            CurrentFile = ">e2shared/" + Open + ".txt"  
+            setMode("openFile")
+        }        
+        elseif(onChat("reset"))
+        {
+            sucOut("Reloading...")
+            setMode("init")   
+        }        
+    }
+    
+    function void openFile()
+    {
+        local Contents = loadFile(CurrentFile)
+        switch(Contents)
+        {
+            default,
+                if(Contents:length() > 59000)
+                {
+                    dump()
+                    setMode("idle")
+                    errOut("Cannot parse Files with character count exceeding 59k.")
+                    break    
+                }
+                            
+                FileContents = Contents
+                sucOut("File Loaded.")
+                setMode("parseContents")
+            break   
+        
+            case "error",
+                errOut("Failed to load: " + CurrentFile + ".")
+                dump()
+                setMode("idle")
+            break
+            
+            case "",    
+                # File is currently loading
+            break
+        }   
+    }
+    
+    function void parseContents()
+    {
+        local Status = ""
+        local Progress = 0
+  
+        if(!E2Parsed)
+        {
+            FileContents:parseE2()
+            
+            Status = "Parsing..."
+            Progress = e2Progress()
+            
+            if(e2Done())
+            {
+                sucOut("E2 Parsed.")
+                E2Events = E2Result
+                E2Parsed = 1   
+            }   
+        }
+        else
+        {
+            if(!E2Combined)
+            {
+                E2Events:combineE2Result()
+                   
+                Status = "Combining..."
+                Progress = combineProgress()
+                            
+                if(combineDone())
+                {
+                    sucOut("Events Combined.")
+                    E2Data = CombineResult
+                    E2Combined = 1
+                }   
+            }
+            else
+            {
+                sucOut("Preperations completed.")
+                setName("Codeviewer - V2")
+                setMode("visualizeData")  
+                return
+            }
+        }
+        
+        if(realtime() % 0.1 == 0)
+        {
+            local TotalProgress = floor(combineProgress() / 2 + e2Progress() / 2, 2)
+            setName("Codeviewer - V2\n\nStatus: " + Status + "\nProgress: " +  Progress + "\n\nTotal Progress: " + TotalProgress)
+        }
+    }
+    
+    function void visualizeData()
+    {
+        if(E2Data:visualize(1, ceil(512 / CVConfig["fontsize", number])))
+        {
+            setMode("idle")   
+        }
+    }
+} 
+elseif(last())
+{
+    EGP:egpClear()   
+}
+
+Mode()

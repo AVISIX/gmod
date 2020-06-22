@@ -7,7 +7,7 @@
 @persist [E2Result PrevEvent UserFunctions]:table
 @persist Parsing Buffer InComment InString BufferInLine
 @persist [E2 Builder]:string
-@persist [E2Chars E2Lines]:array
+@persist [E2Chars ]:array
  
 # [ --- Combiner --- ] #
 @persist IsCombining CombineLC CombineEC # <-- LineCounter EventCounter
@@ -84,7 +84,7 @@ if(first())
         }
         else
         {
-            while(perf(66.66))
+            while(perf(50))
             {
                 if(!CombineLC & !CombineEC)
                 {
@@ -132,12 +132,7 @@ if(first())
     
     function number combineProgress()
     {
-        return (100 / ToCombine:count()) * CombineLC
-    }
-    
-    function table combineResult()
-    {
-        return CombineResult   
+        return !ToCombine:count() ? 0 : floor((100 / ToCombine:count()) * CombineLC, 2)
     }
 }
 
@@ -259,13 +254,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
+            if(getNext() == "\n")
             {
-                if(!P)
-                {
-                    warning("readUntilNonNumber loop closed due to missing OPS.")   
-                }   
                 break   
             }   
             local C = readNext()
@@ -283,13 +273,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
+            if(getNext() == "\n")
             {
-                if(!P)
-                {
-                    warning("readUntilNonEnum loop closed due to missing OPS.")   
-                }   
                 break   
             }   
             local C = readNext()
@@ -307,13 +292,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
+            if(getNext() == "\n")
             {
-                if(!P)
-                {
-                    warning("readUntilChar(" + (Char == "\n" ? "\\n" : Char) + ") loop closed due to missing OPS.")   
-                }   
                 break   
             }     
             local C = readNext()
@@ -346,13 +326,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
+            if(getNext() == "\n")
             {
-                if(!P)
-                {
-                    warning("readUntilSpecial loop closed due to missing OPS.")   
-                }   
                 break   
             }      
             local C = readNext()
@@ -371,13 +346,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
+            if(getNext() == "\n")
             {
-                if(!P)
-                {
-                    warning("readUntilEndOfFunction loop closed due to missing OPS.")   
-                }   
                 break   
             }      
             local C = readNext()
@@ -395,13 +365,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
-            {
-                if(!P)
-                {
-                    warning("readUntilLower loop closed due to missing OPS.")   
-                }   
+            if(getNext() == "\n")
+            {  
                 break   
             } 
             local C = readNext()
@@ -421,13 +386,8 @@ if(first())
         for(I = Buffer, inf())
         {
             local C = E2:index(I)
-            local P = notCrashing()
-            if(C == "\n" | !P)
+            if(C == "\n")
             {
-                if(!P)
-                {
-                    warning("lookupUntil loop closed due to missing OPS.")   
-                }  
                 break      
             }   
             elseif(C == Char)
@@ -446,13 +406,8 @@ if(first())
         for(I = Buffer, inf())
         {
             local C = E2:index(I)
-            local P = notCrashing()
-            if(C == "\n" | !P)
+            if(C == "\n")
             {
-                if(!P)
-                {
-                    warning("lookupUntilEndOfPP loop closed due to missing OPS.")   
-                }  
                 break      
             }   
             elseif(C == " " | C == "\n")
@@ -469,13 +424,8 @@ if(first())
         local R = ""
         for(I = Buffer, inf())
         {
-            local P = notCrashing()
-            if(getNext() == "\n" | !P)
+            if(getNext() == "\n")
             {
-                if(!P)
-                {
-                    warning("readUntilUpper loop closed due to missing OPS.")   
-                }   
                 break   
             }  
             local C = readNext()
@@ -495,7 +445,7 @@ if(first())
         for(I = Buffer, inf())
         {
             local XX = readNext() 
-            if(!notCrashing() | XX == "\n")
+            if(XX == "\n")
             {
                 break   
             }
@@ -547,14 +497,13 @@ if(first())
         {
             E2       = This   
             E2Chars  = E2:explode("")
-            E2Lines  = E2:explode("\n")
             Buffer   = 0
             E2Result = table(1=table())              
             Parsing  = 1
         }
         else
         {
-            while(perf(66.66) & cpuUsage() < CPULimit)
+            while(perf(50))
             {
                 local C = readNext()
                 
@@ -638,47 +587,49 @@ if(first())
                     {
                         event("", Builder)   
                     }
-                    
-                    local Rest = readUntilChar(" ")
-                    
-                    switch(Rest)
+                                       
+                    switch(getNext())
                     {
-                        case "name",
+                        case "n",
                         if(1)
                         {
-                            local Line = readUntilEndOfLine() # readUntilChar("\n")
-                            event("preproc", "@" + Rest + (Line != "" ? " " + Line : ""))  
+                            local Line = readUntilEndOfLine()
+                            event("preproc", "@" + Line)  
                             nextLine()
                         }
                         break
                         
-                        case "trigger",
+                        case "t",
                         if(1)
                         {
                             local Line = readUntilEndOfLine()
-                            event("preproc", "@" + Rest + (Line != "" ? " " + Line : ""))  
+                            event("preproc", "@" + Line)  
                             nextLine()
                         }                        
                         break
 
-                        case "model",
+                        case "m",
                         if(1)
                         {
                             local Line = readUntilEndOfLine()
-                            event("preproc", "@" + Rest + (Line != "" ? " " + Line : "")) 
+                            event("preproc", "@" + Line) 
                             nextLine() 
                         }                        
                         break                        
                         
                         default,
-                        event("preproc", "@" + Rest)
-                        
-                        if(readCur() == Rest:last())
+                        if(1)
                         {
-                            continue   
+                            local Rest = readUntilChar(" ")
+                            event("preproc", "@" + Rest)
+                            
+                            if(readCur() == Rest:last())
+                            {
+                                continue   
+                            }
+    
+                            Builder += readCur()
                         }
-
-                        Builder += readCur()
                         break   
                     }
                 }
@@ -907,12 +858,7 @@ if(first())
     
     function number e2Progress()
     {
-        return round((100 / E2Chars:count()) * Buffer, 1)
-    }
-    
-    function table e2Result()
-    {
-        return E2Result   
+        return !E2Chars:count() ? 0 : floor((100 / E2Chars:count()) * Buffer, 1)
     }
     
     function void e2Reset()
