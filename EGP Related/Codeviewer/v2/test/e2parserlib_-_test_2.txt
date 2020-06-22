@@ -1,0 +1,223 @@
+@name E2ParserLib - Test 2
+
+# [ --- Config --- ] #
+@persist Fontsize
+@persist Font:string
+@persist Syntax:table
+
+# [ --- Important --- ] #
+@persist FileLoaded FileParsed Visualizing LineCounter Combined 
+@persist [ParseResult E2Syntax]:table
+@persist [E ]:entity
+@persist 
+@persist EGP:wirelink
+
+# [ --- Visualizer --- ] #
+@persist VLoading VLineCounter VDone 
+@persist [PreprocText CommentsText StringsText KeywordsText VariablesText TypesText NumbersText UserFunctionsText FunctionsText EnumsText PPCommandsText DefaultText]:string
+
+# [ --- File Loader --- ] #
+@persist FileLoading 
+
+# [ --- Misc --- ] #
+@persist File:string
+
+if(first())
+{ 
+    E = entity()
+      
+    #include "libraries/e2parser"    
+    
+    # --- General shit --- #
+    runOnTick(1)
+    runOnFile(1)
+    
+    function string getFile(Path:string)
+    {
+        if(!FileLoading)
+        {
+            if(fileCanLoad())
+            {
+                fileLoad(Path)   
+                FileLoading = 1
+            }
+        }
+        else
+        {
+            if(fileLoaded())
+            {
+                FileLoading = 0
+                
+                if(fileStatus() == _FILE_OK)
+                {                    
+                    return fileRead()
+                }
+                else
+                {
+                    return "error"   
+                }
+            }
+        }
+        
+        return ""
+    }
+
+    local PossibleEGP = E:isWeldedTo()
+    
+    if(PossibleEGP != noentity())
+    {
+        if(PossibleEGP:type() == "gmod_wire_egp")
+        {
+            EGP = PossibleEGP:wirelink()        
+        }
+        else
+        {
+            error("Not placed on EGP-Screen")   
+        }
+    }
+    
+    EGP:egpClear()
+
+    function void addSyntax(Index, FontSize, Text:string, Color:vector)
+    {
+        EGP:egpTextLayout(Index, Text, vec2(0,0), vec2(9999, 9999))     
+        EGP:egpColor(Index, Color)
+        EGP:egpSize(Index, FontSize)
+        EGP:egpFont(Index, "Courier New")                                            
+    }
+
+    function number table:visualize([Start End]:number)
+    {
+        if(!VLoading & VDone)
+        {
+            VLoading = 1
+            VDone    = 0
+            
+            VLineCounter = Start
+            
+            for(I = 1, 12)
+            {
+                if(!EGP:egpHasObject(I))
+                {
+                    continue   
+                }            
+                EGP:egpRemove(I)   
+            }
+            
+            CommentsText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
+        }
+        else
+        {         
+            if(!VDone)
+            {                   
+                local Limit = This:count()
+                
+                while(perf())
+                {
+                    local Data = This[VLineCounter, table]
+            
+                    PreprocText       += Data["preproc",      string] + "\n"                       
+                    DefaultText       += Data["unknown",      string] + "\n"
+                    CommentsText      += Data["comment",      string] + "\n"
+                    StringsText       += Data["string",       string] + "\n"
+                    EnumsText         += Data["enum",         string] + "\n"
+                    TypesText         += Data["type",         string] + "\n"
+                    KeywordsText      += Data["keyword",      string] + "\n"
+                    NumbersText       += Data["number",       string] + "\n"
+                    FunctionsText     += Data["function",     string] + "\n"
+                    PPCommandsText    += Data["ppcommand",    string] + "\n"
+                    UserFunctionsText += Data["userfunction", string] + "\n"
+                    VariablesText     += Data["variable",     string] + "\n"
+                
+                    VLineCounter++
+                    
+                    if(VLineCounter > End)
+                    {
+                        VDone = 1
+                        break   
+                    }
+                }     
+            }   
+            else
+            {
+                local FS = 15
+        
+                addSyntax(1, FS, PPCommandsText,    vec(240,160,240))       
+                addSyntax(2, FS, NumbersText,       vec(247,167,167))
+                addSyntax(3, FS, EnumsText,         vec(240,160,240))        
+                addSyntax(4, FS, TypesText,         vec(240,160,96))
+                addSyntax(5, FS, FunctionsText,     vec(160,160,240))
+                addSyntax(6, FS, UserFunctionsText, vec(102,122,102))
+                addSyntax(7, FS, CommentsText,      vec(128))        
+                addSyntax(8, FS, PreprocText,       vec(240,240,160))
+                addSyntax(9, FS, VariablesText,     vec(160, 240, 160)) 
+                addSyntax(10, FS, KeywordsText,     vec(160,240,240))
+                addSyntax(11, FS, StringsText,      vec(150,150,150))
+                addSyntax(12, FS, DefaultText,      vec(255))   
+                
+                VLoading = 0
+                
+                return 1                 
+            }            
+        }
+        
+        return 0         
+    }
+}
+
+if(FileParsed)
+{
+    if(Combined)
+    {   
+        if(E2Syntax:visualize(1, 35))
+        {
+            runOnTick(0)    
+        }
+    }
+    else
+    {
+        ParseResult:combineE2Result()
+        Combined = combineDone()       
+        if(Combined)
+        {
+            E2Syntax = combineResult() 
+        }   
+    }    
+}
+else
+{
+    if(FileLoaded)
+    { 
+        File:parseE2()
+        
+        setName("E2ParserLib - Test 1\nStatu: Parsing...\nProgress: " +  e2Progress())
+        
+        if(e2Done())
+        {
+            ParseResult = e2Result()
+            setName("E2ParserLib - Test 1")
+            hint("File Parsed", 2)
+            FileParsed = 1
+        }    
+    }
+    else
+    {
+        switch(File)
+        {
+            case "",
+                e2Reset()
+                File = getFile(">e2shared/e2test.txt")
+            break
+            
+        
+            case "error",
+                error("Uh oh fucky wucky")
+            break
+        
+            default,
+                hint("File Loaded", 2)
+                FileLoaded = 1
+            break   
+        }
+    }
+}

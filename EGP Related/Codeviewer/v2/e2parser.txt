@@ -9,8 +9,141 @@
 @persist [E2 Builder]:string
 @persist [E2Chars E2Lines]:array
  
+# [ --- Combiner --- ] #
+@persist IsCombining CombineLC CombineEC # <-- LineCounter EventCounter
+@persist [CombineResult ToCombine]:table 
+@persist SyntaxTypes:array
+
 # [ --- Debug --- ] #
-@persist E2Imported E2Importing E2DebugDone
+@persist E2Imported E2Importing E2DebugDone E2ParsingDone
+
+# [ -------------------------------------------------------------------------------------------- ] #
+# [ --------------------------------------- Combiner ------------------------------------------- ] #
+# [ -------------------------------------------------------------------------------------------- ] #
+
+if(first())
+{
+    SyntaxTypes = array(
+        "preproc",
+        "comment",
+        "string",
+        "keyword",
+        "function",
+        "userfunction",
+        "variable",
+        "ppcommand",
+        "enum",
+        "type",
+        "number",
+        "unknown"
+    )
+    
+    function void addEvent(Type:string, Text:string)
+    {
+        local Spaced = Text:replaceRE(".", " ")
+        
+        foreach(I, ST:string = SyntaxTypes)
+        {
+            if(ST != Type)
+            {
+                CombineResult[CombineLC, table][ST, string] = CombineResult[CombineLC, table][ST, string] + Spaced
+                continue
+            }  
+        
+            CombineResult[CombineLC, table][ST, string] = CombineResult[CombineLC, table][ST, string] + Text                
+        }   
+    }
+    
+    function void table:combineE2Result()
+    {
+        if(!IsCombining)
+        {
+            ToCombine = This
+            IsCombining = 1   
+            CombineLC = 0
+            CombineEC = 0      
+                     
+            #[
+                CombineResult:
+                    n:
+                        preproc:
+                        comment:
+                        string:
+                        keyword:
+                        function:
+                        userfunction:
+                        variable:
+                        ppcommand:
+                        enum:
+                        default:
+                        type:
+                        number:
+            ]#
+            
+            CombineResult = table(1=table())
+        }
+        else
+        {
+            while(perf(66.66))
+            {
+                if(!CombineLC & !CombineEC)
+                {
+                    CombineLC = 1
+                    CombineEC = 0   
+                }  
+                elseif(CombineLC > ToCombine:count())
+                {                     
+                    ToCombine = table()
+                    IsCombining = 0
+                    break   
+                }
+                
+                local CurLine = ToCombine[CombineLC, table]
+                
+                CombineEC++                
+                if(CombineEC > CurLine:count())
+                {
+                    CombineLC++
+                    CombineEC = 0
+                    CombineResult[CombineLC, table] = table()
+                    continue   
+                }
+                
+                local CurEvent = CurLine[CombineEC, table]
+                              
+                addEvent(CurEvent["type", string], CurEvent["text", string])              
+            }        
+        }         
+    }
+    
+    function number combineDone()
+    {
+        return IsCombining == 0 & CombineLC >= ToCombine:count()
+    }
+    
+    function void combineReset()
+    {
+        IsCombining   = 0
+        CombineLC     = 0
+        CombineEC     = 0
+        ToCombine     = table()
+        CombineResult = table(1 = table())    
+    }
+    
+    function number combineProgress()
+    {
+        return (100 / ToCombine:count()) * CombineLC
+    }
+    
+    function table combineResult()
+    {
+        return CombineResult   
+    }
+}
+
+# [ -------------------------------------------------------------------------------------------- ] #
+# [ --------------------------------------- Parser --------------------------------------------- ] #
+# [ -------------------------------------------------------------------------------------------- ] #
 
 if(first())
 {       
@@ -86,7 +219,7 @@ if(first())
     function void nextLine()
     {
         BufferInLine = 0
-        E2Result["lines", table][E2Result["lines",table]:count() + 1, table] = table()       
+        E2Result[E2Result:count() + 1, table] = table()       
     }
     
     function string readCur()
@@ -396,7 +529,7 @@ if(first())
                         "text" = Text:replace("\n", "")
                     )
                     
-        E2Result["lines", table][E2Result["lines", table]:count(), table]:pushTable(Event)
+        E2Result[E2Result:count(), table]:pushTable(Event)
         
         Builder   = ""
         PrevEvent = Event
@@ -404,7 +537,7 @@ if(first())
     
     function table getPrevEvent(N)
     {
-        local Events = E2Result["lines", table][E2Result["lines", table]:count(), table]
+        local Events = E2Result[E2Result:count(), table]
         return Events[Events:count() - N, table]    
     }
     
@@ -416,7 +549,7 @@ if(first())
             E2Chars  = E2:explode("")
             E2Lines  = E2:explode("\n")
             Buffer   = 0
-            E2Result = table("lines"=table(1=table()))              
+            E2Result = table(1=table())              
             Parsing  = 1
         }
         else
@@ -575,6 +708,11 @@ if(first())
                                     nextLine()   
                                 }
                             }
+                            elseif(Lookup == "#include")
+                            {
+                                event("keyword", Lookup)
+                                Buffer += Lookup:length()                                                                       
+                            }
                             else
                             {
                                 local Line = readUntilEndOfLine()
@@ -621,13 +759,13 @@ if(first())
                     local Variable = C + readUntilSpecial()
                     
                     event("variable", Variable)     
-
-                    if(readCur() == Variable:last())
+                    
+                    if(getPrev() == Variable:last())
                     {
-                        continue   
+                        Buffer--
                     }
                     
-                    Builder += readCur()
+                    continue                   
                 }
                 
                 # [ --- Functions, UserFunctions & Types --- ] #
@@ -642,7 +780,8 @@ if(first())
                     
                     local Unknown = C + readUntilEndOfFunction()
                     
-                    local IsKeyword = 0                    
+                    local IsKeyword = 0     
+                                   
                     foreach(I, Keyword:string = array("function", "continue", "foreach", "default", "elseif", "return", "local", "break", "switch", "while", "case", "else", "for", "if"))
                     {
                         if(Unknown == Keyword)
@@ -655,6 +794,11 @@ if(first())
                     if(IsKeyword)
                     { 
                         event("keyword", Unknown)
+                        if(getPrev() == Unknown:last())
+                        {
+                            Buffer--
+                        }
+                        continue
                     }
                     else
                     {   
@@ -672,7 +816,13 @@ if(first())
                                           
                             if(readCur() == "(" | LastEvent == "(")
                             {
-                                if(getPrevEvent(1)["type", string] == "type" & getPrevEvent(3)["type", string] != "string")
+                                if(getPrevEvent(1)["type", string] == "type"
+                                     & getPrevEvent(3)["type", string] != "string"
+                                     & getPrevEvent(3)["type", string] != "variable"
+                                     & getPrevEvent(3)["type", string] != "number"
+                                     & getPrevEvent(3)["type", string] != "enum"
+                                     & getPrevEvent(4)["type", string] != "function"
+                                     & getPrevEvent(4)["type", string] != "userfunction")
                                 {
                                     event("userfunction", Unknown)
                                     UserFunctions[Unknown, number] = 0 # fucking e2 only able to check if keys exist smh
@@ -779,6 +929,10 @@ if(first())
         InString      = 0
         E2            = ""
     }
+
+# [ -------------------------------------------------------------------------------------------- ] #
+# [ -------------------------------------------------------------------------------------------- ] #
+# [ -------------------------------------------------------------------------------------------- ] #
     
     function void e2LibDebug(File:string)
     {
@@ -815,9 +969,17 @@ if(first())
         {
             if(!E2DebugDone)
             {
-                fileRead():parseE2()
-                setName("Prog: " + e2Progress() + "%\nLine Progress: " + BufferInLine)
-                E2DebugDone = e2Done()
+                if(!E2ParsingDone)
+                {
+                    fileRead():parseE2()
+                    setName("Prog: " + e2Progress() + "%\nLine Progress: " + BufferInLine)
+                    E2ParsingDone = e2Done()
+                }
+                else
+                {
+                    E2Result:combineE2Result()
+                    E2DebugDone = combineDone()   
+                }
             } 
                   
             if(changed(E2DebugDone) & E2DebugDone)
@@ -825,21 +987,9 @@ if(first())
                 E2Importing = 0
                 E2Imported  = 0
                 
-                #[
-                foreach(I, Key:number = E2Result["lines", table]:keys())
-                {
-                    if(I > 5)
-                    {
-                        break   
-                    }
-
-                    printTable(E2Result["lines", table][Key, table])
-                }
-                ]#
-                
-                printTable(E2Result)
+                printTable(CombineResult[5, table])
             
-                print(E2Result["lines", table]:count())
+         #       print(E2Result["lines", table]:count())
             
                 runOnFile(0)
                 runOnTick(0)

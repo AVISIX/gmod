@@ -18,8 +18,6 @@
 # [ --- Misc --- ] #
 @persist File:string
 
-@model models/hunter/blocks/cube05x05x05.mdl
-
 if(first())
 { 
     E = entity()
@@ -86,11 +84,11 @@ if(FileParsed)
     }
     else
     {
-        if(LineCounter < E2Result["lines", table]:count())
+        if(LineCounter < E2Result:count())
         {
             while(perf(75))
             { 
-                local ParsedLine = ParseResult["lines", table][LineCounter, table]
+                local ParsedLine = ParseResult[LineCounter, table]
                 
                 for(I = 1, ParsedLine:count())
                 {
@@ -386,12 +384,12 @@ else
     { 
         File:parseE2()
         
-        setName("Codeviewer - V2\nStatu: Parsing...\nProgress: " +  e2Progress())
+        setName("E2ParserLib - Test 1\nStatu: Parsing...\nProgress: " +  e2Progress())
         
         if(e2Done())
         {
             ParseResult = e2Result()
-            setName("Codeviewer - V2")
+            setName("E2ParserLib - Test 1")
             hint("File Parsed", 2)
             FileParsed = 1
         }    
