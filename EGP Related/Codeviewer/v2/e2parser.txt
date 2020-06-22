@@ -232,6 +232,31 @@ if(first())
         return R           
     }
     
+    
+    function string readUntilEndOfFunction()
+    {
+        local R = ""
+        for(I = Buffer, inf())
+        {
+            local P = notCrashing()
+            if(getNext() == "\n" | !P)
+            {
+                if(!P)
+                {
+                    warning("readUntilEndOfFunction loop closed due to missing OPS.")   
+                }   
+                break   
+            }      
+            local C = readNext()
+            if(C:isSpecial() & C != "_")
+            {
+                break   
+            }
+            R += C
+        }   
+        return R           
+    }    
+    
     function string readUntilLower()
     {
         local R = ""
@@ -338,12 +363,12 @@ if(first())
         
         if(T == "unknown" & (Text == "" | Text == "\n"))
         {
-            #return    
+            return    
         } 
         
         local Event = table(
                         "type" = T, 
-                        "text" = Text
+                        "text" = Text:replace("\n", "")
                     )
                     
         E2Result["lines", table][E2Result["lines", table]:count(), table]:pushTable(Event)
@@ -482,7 +507,7 @@ if(first())
                         if(1)
                         {
                             local Line = readUntilEndOfLine()
-                            event("preproc", "@" + Rest + (Line != "" ? " " + " " + Line : "")) 
+                            event("preproc", "@" + Rest + (Line != "" ? " " + Line : "")) 
                             nextLine() 
                         }                        
                         break                        
@@ -525,7 +550,7 @@ if(first())
                             {
                                 local Line = readUntilEndOfLine()
                                 event("comment", "#" + Line) 
-                              #  nextLine()
+                                nextLine()
                             } 
                         }
                     }      
@@ -586,7 +611,7 @@ if(first())
                     
                     Builder += C
                     
-                    local Unknown = C + readUntilSpecial()
+                    local Unknown = C + readUntilEndOfFunction()
                     
                     local IsKeyword = 0                    
                     foreach(I, Keyword:string = array("function", "continue", "foreach", "default", "elseif", "return", "local", "break", "switch", "while", "case", "else", "for", "if"))
@@ -607,18 +632,28 @@ if(first())
                         local CheckA = (getPrevEvent(3)["type", string] == "keyword" & getPrevEvent(3)["text", string] == "function")
                         local CheckB = (getPrevEvent(1)["type", string] == "keyword" & getPrevEvent(1)["text", string] == "function") & readCur() != " "
                         
-                        if(CheckA | CheckB | UserFunctions:exists(Unknown))
+                        if((CheckA | CheckB | UserFunctions:exists(Unknown)) & readCur() != ":")
                         {
                             event("userfunction", Unknown)
                             UserFunctions[Unknown, number] = 0 # fucking e2 only able to check if keys exist smh
                         }
                         else
-                        {                  
-                            if(readCur() == "(" | getPrevEvent(0)["text", string] == "(")
+                        {    
+                            local LastEvent = getPrevEvent(0)["text", string]:replaceRE("%s", "")
+                                          
+                            if(readCur() == "(" | LastEvent == "(")
                             {
-                                event("function", Unknown)   
+                                if(getPrevEvent(1)["type", string] == "type" & getPrevEvent(3)["type", string] != "string")
+                                {
+                                    event("userfunction", Unknown)
+                                    UserFunctions[Unknown, number] = 0 # fucking e2 only able to check if keys exist smh
+                                }
+                                else
+                                {
+                                    event("function", Unknown)   
+                                }
                             }                    
-                            elseif(readCur() == "]" | readCur() == " " | readCur() == "" | readCur() == ")" | readCur() == "," | getNext() == "\n")
+                            elseif(readCur() == "]" | readCur() == " " | readCur() == "" | readCur() == ":" | readCur() == ")" | readCur() == "," | getNext() == "\n")
                             {
                                 event("type", Unknown)   
                             }    

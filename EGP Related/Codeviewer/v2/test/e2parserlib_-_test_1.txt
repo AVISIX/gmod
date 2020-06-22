@@ -1,0 +1,419 @@
+@name E2ParserLib - Test 1
+
+# [ --- Config --- ] #
+@persist Fontsize
+@persist Font:string
+@persist Syntax:table
+
+# [ --- Important --- ] #
+@persist FileLoaded FileParsed Visualizing LineCounter
+@persist [ParseResult ]:table
+@persist [E ]:entity
+@persist [PreprocText CommentsText StringsText KeywordsText VariablesText TypesText NumbersText UserFunctionsText FunctionsText EnumsText PPCommandsText DefaultText]:string
+@persist EGP:wirelink
+
+# [ --- File Loader --- ] #
+@persist FileLoading 
+
+# [ --- Misc --- ] #
+@persist File:string
+
+@model models/hunter/blocks/cube05x05x05.mdl
+
+if(first())
+{ 
+    E = entity()
+      
+    #include "libraries/e2parser"    
+    
+    # --- General shit --- #
+    runOnTick(1)
+    runOnFile(1)
+    
+    function string getFile(Path:string)
+    {
+        if(!FileLoading)
+        {
+            if(fileCanLoad())
+            {
+                fileLoad(Path)   
+                FileLoading = 1
+            }
+        }
+        else
+        {
+            if(fileLoaded())
+            {
+                FileLoading = 0
+                
+                if(fileStatus() == _FILE_OK)
+                {                    
+                    return fileRead()
+                }
+                else
+                {
+                    return "error"   
+                }
+            }
+        }
+        
+        return ""
+    }
+
+    local PossibleEGP = E:isWeldedTo()
+    
+    if(PossibleEGP != noentity())
+    {
+        if(PossibleEGP:type() == "gmod_wire_egp")
+        {
+            EGP = PossibleEGP:wirelink()        
+        }
+        else
+        {
+            error("Not placed on EGP-Screen")   
+        }
+    }
+    
+    EGP:egpClear()
+}
+
+if(FileParsed)
+{
+    if(!Visualizing)
+    {
+        Visualizing = 1
+        LineCounter = 1   
+    }
+    else
+    {
+        if(LineCounter < E2Result["lines", table]:count())
+        {
+            while(perf(75))
+            { 
+                local ParsedLine = ParseResult["lines", table][LineCounter, table]
+                
+                for(I = 1, ParsedLine:count())
+                {
+                    local Event = ParsedLine[I, table]
+                    local Type  = Event["type", string]
+                    local Text  = Event["text", string]
+            
+                    local Spaced = Text:replace("\n", ""):replaceRE(".", " ")
+                    
+                    switch(Type)
+                    {       
+                        case "ppcommand",
+                            PPCommandsText += Text
+                            
+                            NumbersText      += Spaced                            
+                            TypesText        += Spaced                            
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced  
+                            UserFunctionsText+= Spaced    
+                            FunctionsText    += Spaced 
+                            StringsText      += Spaced     
+                            EnumsText        += Spaced                                  
+                        break
+                        
+                        case "number",
+                            NumbersText += Text
+                            
+                            TypesText        += Spaced                            
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced  
+                            UserFunctionsText+= Spaced    
+                            FunctionsText    += Spaced 
+                            StringsText      += Spaced     
+                            EnumsText        += Spaced     
+                            PPCommandsText   += Spaced                        
+                        break
+                        
+                        case "enum",
+                            EnumsText += Text
+                            
+                            NumbersText      += Spaced                            
+                            TypesText        += Spaced                            
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced  
+                            UserFunctionsText+= Spaced    
+                            FunctionsText    += Spaced 
+                            StringsText      += Spaced  
+                            PPCommandsText   += Spaced                              
+                        break
+                        
+                        case "type",
+                            TypesText += Text
+                            
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced  
+                            UserFunctionsText+= Spaced    
+                            FunctionsText    += Spaced 
+                            StringsText      += Spaced   
+                            NumbersText      += Spaced    
+                            EnumsText        += Spaced 
+                            PPCommandsText   += Spaced                
+                        break
+                        
+                        case "function",
+                            FunctionsText += Text
+
+                            TypesText        += Spaced                    
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced  
+                            UserFunctionsText+= Spaced  
+                            StringsText      += Spaced 
+                            NumbersText      += Spaced   
+                            EnumsText        += Spaced   
+                            PPCommandsText   += Spaced  
+                        break
+                        
+                        case "userfunction",
+                            UserFunctionsText += Text 
+                            
+                            TypesText     += Spaced
+                            CommentsText  += Spaced
+                            VariablesText += Spaced
+                            DefaultText   += Spaced
+                            PreprocText   += Spaced
+                            KeywordsText  += Spaced  
+                            FunctionsText    += Spaced    
+                            StringsText      += Spaced   
+                            NumbersText      += Spaced 
+                            EnumsText        += Spaced   
+                            PPCommandsText   += Spaced                                
+                        break
+                        
+                        case "comment",
+                            CommentsText += Text
+                            
+                            VariablesText    += Spaced
+                            DefaultText      += Spaced
+                            PreprocText      += Spaced
+                            KeywordsText     += Spaced
+                            TypesText        += Spaced
+                            UserFunctionsText+= Spaced
+                            FunctionsText    += Spaced   
+                            StringsText      += Spaced  
+                            NumbersText      += Spaced   
+                            EnumsText        += Spaced 
+                            PPCommandsText   += Spaced     
+                        break
+                        
+                        case "preproc",
+                            PreprocText += Text 
+                                      
+                            VariablesText    += Spaced                 
+                            DefaultText      += Spaced
+                            CommentsText     += Spaced
+                            KeywordsText     += Spaced
+                            TypesText        += Spaced
+                            UserFunctionsText+= Spaced
+                            FunctionsText    += Spaced   
+                            StringsText      += Spaced  
+                            NumbersText      += Spaced  
+                            EnumsText        += Spaced  
+                            PPCommandsText   += Spaced      
+                        break
+                        
+                        case "variable",
+                            VariablesText += Text
+
+                            PreprocText      += Spaced
+                            DefaultText      += Spaced
+                            CommentsText     += Spaced
+                            KeywordsText     += Spaced
+                            TypesText        += Spaced
+                            UserFunctionsText+= Spaced
+                            FunctionsText    += Spaced  
+                            StringsText      += Spaced  
+                            NumbersText      += Spaced 
+                            EnumsText        += Spaced  
+                            PPCommandsText   += Spaced        
+                        break
+                        
+                        case "keyword",
+                            KeywordsText += Text
+                            
+                            PreprocText      += Spaced
+                            DefaultText      += Spaced
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            TypesText        += Spaced
+                            UserFunctionsText+= Spaced
+                            FunctionsText    += Spaced 
+                            StringsText      += Spaced   
+                            NumbersText      += Spaced
+                            EnumsText        += Spaced  
+                            PPCommandsText   += Spaced         
+                        break
+                        
+                        case "string",
+                            StringsText += Text
+                            
+                            KeywordsText     += Spaced                            
+                            PreprocText      += Spaced
+                            DefaultText      += Spaced
+                            CommentsText     += Spaced
+                            VariablesText    += Spaced
+                            TypesText        += Spaced
+                            UserFunctionsText+= Spaced
+                            FunctionsText    += Spaced     
+                            NumbersText      += Spaced 
+                            EnumsText        += Spaced 
+                            PPCommandsText   += Spaced                                 
+                        break
+                        
+                        default,
+                            DefaultText += Text
+                            
+                            VariablesText    += Spaced
+                            PreprocText      += Spaced    
+                            CommentsText     += Spaced  
+                            KeywordsText     += Spaced   
+                            TypesText        += Spaced  
+                            UserFunctionsText+= Spaced   
+                            FunctionsText    += Spaced 
+                            StringsText      += Spaced  
+                            NumbersText      += Spaced   
+                            EnumsText        += Spaced  
+                            PPCommandsText   += Spaced                                        
+                        break   
+                    }
+                }                    
+        
+                LineCounter++ 
+            
+                PreprocText       += "\n"                       
+                DefaultText       += "\n"
+                CommentsText      += "\n"
+                StringsText       += "\n"
+                EnumsText         += "\n"
+                TypesText         += "\n"
+                KeywordsText      += "\n"
+                NumbersText       += "\n"
+                FunctionsText     += "\n"
+                PPCommandsText    += "\n"
+                UserFunctionsText += "\n"
+                VariablesText     += "\n"
+            }
+        }
+        else
+        {
+            local FS = 12
+            
+            EGP:egpTextLayout(1, DefaultText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(1, vec(255))
+            EGP:egpSize(1, FS)
+            EGP:egpFont(1, "Courier New") 
+
+            EGP:egpTextLayout(2, PreprocText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(2, vec(240,240,160))
+            EGP:egpSize(2, FS)
+            EGP:egpFont(2, "Courier New") 
+
+            EGP:egpTextLayout(3, CommentsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(3, vec(128))
+            EGP:egpSize(3, FS)
+            EGP:egpFont(3, "Courier New") 
+
+            EGP:egpTextLayout(4, VariablesText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(4, vec(160, 240, 160))
+            EGP:egpSize(4, FS)
+            EGP:egpFont(4, "Courier New") 
+
+            EGP:egpTextLayout(5, KeywordsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(5, vec(160,240,240))
+            EGP:egpSize(5, FS)
+            EGP:egpFont(5, "Courier New")                         
+
+            EGP:egpTextLayout(6, TypesText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(6, vec(240,160,96))
+            EGP:egpSize(6, FS)
+            EGP:egpFont(6, "Courier New")                         
+            
+            EGP:egpTextLayout(7, UserFunctionsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(7, vec(102,122,102))
+            EGP:egpSize(7, FS)
+            EGP:egpFont(7, "Courier New")                         
+
+            EGP:egpTextLayout(8, FunctionsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(8, vec(160,160,240))
+            EGP:egpSize(8, FS)
+            EGP:egpFont(8, "Courier New")                                                 
+                        
+            EGP:egpTextLayout(9, StringsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(9, vec(150,150,150))
+            EGP:egpSize(9, FS)
+            EGP:egpFont(9, "Courier New")                                                 
+                       
+            EGP:egpTextLayout(10, NumbersText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(10, vec(247,167,167))
+            EGP:egpSize(10, FS)
+            EGP:egpFont(10, "Courier New")           
+
+            EGP:egpTextLayout(11, EnumsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(11, vec(240,160,240))
+            EGP:egpSize(11, FS)
+            EGP:egpFont(11, "Courier New")           
+
+            EGP:egpTextLayout(12, PPCommandsText, vec2(0,0), vec2(9999, 9999))     
+            EGP:egpColor(12, vec(240,160,240))
+            EGP:egpSize(12, FS)
+            EGP:egpFont(12, "Courier New")           
+                                            
+            runOnTick(0)
+        }
+    }       
+}
+else
+{
+    if(FileLoaded)
+    { 
+        File:parseE2()
+        
+        setName("Codeviewer - V2\nStatu: Parsing...\nProgress: " +  e2Progress())
+        
+        if(e2Done())
+        {
+            ParseResult = e2Result()
+            setName("Codeviewer - V2")
+            hint("File Parsed", 2)
+            FileParsed = 1
+        }    
+    }
+    else
+    {
+        switch(File)
+        {
+            case "",
+                e2Reset()
+                File = getFile(">e2shared/e2test.txt")
+            break
+            
+        
+            case "error",
+                error("Uh oh fucky wucky")
+            break
+        
+            default,
+                hint("File Loaded", 2)
+                FileLoaded = 1
+            break   
+        }
+    }
+}
