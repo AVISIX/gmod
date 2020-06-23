@@ -4,21 +4,31 @@
 @persist CVConfig:table
 
 # [ --- Globals --- ] #
+@persist PrevLine PrevX LastLineNumbersWidth LastLineIndex LastToggle
 @persist [Mode PrevMode CurrentFile FileContents]:string
 @persist EGP:wirelink
-@persist [E]:entity
+@persist [E User]:entity
 @persist [E2Events E2Data]:table
+@persist [Cursor PrevTextPos]:vector2
 
 # [ --- File Loader --- ] #
-@persist FileLoading
+@persist FileLoading 
 
 # [ --- Parser & Combiner --- ] #
 @persist E2Parsed E2Combined 
 
 # [ --- Visualizer --- ] #
-@persist VLoading VLineCounter VDone 
+@persist VLoading VLineCounter VDone TextStartingIndex
 @persist [PreprocText CommentsText StringsText KeywordsText VariablesText TypesText NumbersText UserFunctionsText FunctionsText EnumsText PPCommandsText DefaultText]:string
 
+# [ --- File Browser --- ] #
+@persist FileListing Files:array BrowserActive SavedCursor:vector2 Page Up2Date BrowserItemsStartIndex FilePath:string
+
+#@model models/hunter/blocks/cube05x05x05.mdl
+
+interval(60)
+
+AimEnt = User:aimEntity()
 
 if(first())
 {   
@@ -26,19 +36,43 @@ if(first())
     
     setName("Codeviewer - V2")
     
-    runOnTick(1)
     runOnChat(1)
     runOnLast(1)
     runOnFile(1)
     
-    # [ --- Config --- ] #        
+    # [ --- To Do --- ] #
+    #[
+        - Beim Scrollen fehlende Teile laden, anstatt alles. (Zurzeit wird alles neu geladen, das, wenn moeglich, vermeiden)
+    ]#
+    
+    
+    # [ --- Config --- ] #    
+    User = owner()
+        
     CVConfig = table(
         "chatprefix" = "/",
+        "debug"      = 0,
+        "curline"    = 1,
         
-        "font"       = "Courier New",
+        "font"       = "Consolas",
         "fontsize"   = 13,
         
         "colors" = table(
+            "background" = vec(40,40,45),
+            "sbbg"       = vec(30,30,35),
+            "linenums"   = vec(90,90,95),    
+                
+            "progressbar" = vec(22,221,35),
+                
+            "objectbg"    = vec(50,50,55),
+            "objectbg2"   = vec(60,60,65),
+            "objectol"    = vec(80,80,85),
+                
+            "folder"      = vec(229,214,6),
+            "file"        = vec(66,147,209),
+                
+            "listitembg"  = vec(60,60,65),
+                
             "preproc"      = vec(240,240,160),
             "variable"     = vec(160, 240, 160),            
             "comment"      = vec(128),
@@ -48,15 +82,43 @@ if(first())
             "keyword"      = vec(160,240,240),
             "number"       = vec(247,167,167),            
             "function"     = vec(160,160,240),
-            "ppcommand"    = vec(240,160,240),
+            "ppcommand"    = vec(240,96,240),
             "userfunction" = vec(102,122,102),
             "unknown"      = vec(255)
+        ),
+        
+        "sounds" = table(
+            "success" = "buttons/button9.wav",
+            "failure" = "buttons/button8.wav",
+            "warning" = "buttons/button4.wav",
+            
+            "click"   = "buttons/button16.wav",
+            "error"   = "buttons/button10.wav"
         )
     )
+
+    BrowserItemsStartIndex = 15
+    TextStartingIndex = 100
         
     # [ --- Misc --- ] #
     #include "libraries/e2parser"
    
+    function void playSound(Sound:string)
+    {
+        EGP:entity():soundPlay(randint(1,255), 1, CVConfig["sounds", table][Sound, string])   
+    }
+
+    function void setUser(NewUser:entity)
+    {
+        User   = NewUser
+        Cursor = EGP:egpCursor(NewUser)       
+    }
+
+    function vector col(ID:string)
+    {
+        return CVConfig["colors", table][ID, vector]   
+    }
+
     function void setMode(NewMode:string)
     {
         PrevMode = Mode
@@ -115,27 +177,73 @@ if(first())
         }
         else
         {
-            if(fileLoaded() & !fileLoading())
+            if(fileClk() & !fileLoading())
             {
                 FileLoading = 0
                 
                 if(fileStatus() == _FILE_OK)
-                {                    
+                { 
                     return fileRead()
-                }
+                }   
                 else
-                {
-                    return "error"   
+                {              
+                    return "error"
                 }
-            }
+            } 
         }
         
         return ""
     }
 
+    function number hovering(Element)
+    {
+        return inrange(Cursor, EGP:egpPos(Element) - EGP:egpSize(Element), EGP:egpPos(Element) + EGP:egpSize(Element))     
+    }
+
+    function number clicked(Element)
+    {
+        if(hovering(Element) & changed(User:keyPressed("E")) & User:keyPressed("E"))
+        {       
+            return 1    
+        }
+        
+        return 0        
+    }
+    
+    function void centralize(Element)
+    {
+        EGP:egpPos(Element, vec2(256, 256))
+    }
+    
+    function void centralize(Element, Offset:vector2)
+    {
+        EGP:egpPos(Element, vec2(256, 256) + Offset)
+    }    
+    
+    function number clicked(Key:string)
+    {
+        return AimEnt == EGP:entity() & User:keyPressed(Key)   
+    }
+
+    function number number:mSub(Str)
+    {
+        local X = round(This)
+        
+        if(X % Str)
+        {
+            return X + Str - (X % Str)   
+        }
+        
+        return X
+    }
+
     function void pOut(Color:vector, Code:string, Message:string, Sound:string)
     {
-        printColor(vec(0), ">> [", Color, Code, vec(0), "] ", vec(255), Message)     
+        if(CVConfig["debug", number])
+        {
+            printColor(vec(0), ">> [", Color, Code, vec(0), "] ", vec(255), Message)    
+        }  
+        
         entity():soundPlay(hash(Code + Message), 2, Sound)      
     }
 
@@ -154,35 +262,162 @@ if(first())
         pOut(vec(255,255,0), "Warning", Code, "buttons/button4.wav")    
     }
 
-    function void addSyntax(Index, FontSize, Text:string, Color:vector)
+    function string encodeFilename(Input:string)
     {
-        if(!EGP:egpHasObject(Index))
+        local Result = Input
+        foreach(I, Reserved:string = array("<", ">", ":", "\"", "/", "\\", "|", "?", "*", " "))
         {
-            EGP:egpTextLayout(Index, Text, vec2(0,0), vec2(9999, 9999)) 
+            Result = Result:replace(Reserved, "_")   
+        }  
+        return Result
+    }
+
+    function void addSyntax(Index, Text:string, Color:vector)
+    {
+        local I = TextStartingIndex + Index
+        
+        if(!EGP:egpHasObject(I))
+        {
+            EGP:egpTextLayout(I, Text, vec2(0,0), vec2(9999, 9999)) 
+            EGP:egpParent(I, 1)        
         }   
         else
         {
-            EGP:egpSetText(Index, Text)    
+            EGP:egpSetText(I, Text)    
         }
          
-        EGP:egpColor(Index, Color)
-        EGP:egpSize(Index, FontSize)
-        EGP:egpFont(Index, "Courier New")                                            
+        EGP:egpColor(I,  Color)
+        EGP:egpSize(I,   CVConfig["fontsize", number])
+        EGP:egpFont(I,   CVConfig["font", string])                                           
+    }
+
+    function void setTextX(N)
+    {
+        EGP:egpPos(1, vec2(N, 0))
+    }
+
+    function void setSidebar(Width)
+    {
+        local PrevPos = EGP:egpPos(1)     
+         
+      #  EGP:egpPos(1,  vec2(Width + 2.5, 0))        
+        EGP:egpPos(3,  vec2(Width / 2, 256))
+        EGP:egpSize(3, vec2(Width, 512))       
+        EGP:egpPos(4,  vec2(Width, 256))      
+        
+        LastLineNumbersWidth = Width
+    }
+
+    function void toggleSidebar(Toggle)
+    {
+        if(Toggle == LastToggle)
+        {
+            return 
+        }
+        
+        if(!Toggle)
+        {
+            EGP:egpAlpha(3, 0)
+            EGP:egpAlpha(4, 0)
+            EGP:egpAlpha(5, 0)
+        } 
+        else
+        {  
+            EGP:egpAlpha(3, 255)
+            EGP:egpAlpha(4, 255)
+            EGP:egpAlpha(5, 255)
+        }
+        
+        LastToggle = Toggle        
+    }
+    
+    function void toggleProgressBar(Toggle, Progress)
+    {
+        local Al = 255 * Toggle
+        EGP:egpAlpha(6, Al)
+        EGP:egpAlpha(7, Al)
+        EGP:egpAlpha(8, Al)
+        
+        local PTOS = (256 / 100) * Progress
+        
+        EGP:egpPos(7,  vec2(PTOS, 507))
+        EGP:egpSize(7, vec2(PTOS * 2, 8))
+    }
+    
+    function void toggleBrowser(Toggle)
+    {
+        local Status = Toggle * 255
+        
+        EGP:egpAlpha(12, Status)
+        EGP:egpAlpha(13, Status)
+        EGP:egpAlpha(14, Status)     
+    
+        EGP:egpAlpha(49, Status)
+        EGP:egpAlpha(50, Status)  
+        EGP:egpAlpha(51, Status)
+        
+        EGP:egpAlpha(52, Status)
+        EGP:egpAlpha(53, Status)
+        EGP:egpAlpha(54, Status)
+    
+        BrowserActive = Toggle
+        
+        if(!BrowserActive)
+        {
+            for(I = BrowserItemsStartIndex, BrowserItemsStartIndex + 10 * 3, 3)
+            {
+                EGP:egpAlpha(I, 0)   
+                EGP:egpAlpha(I + 1, 0)  
+                EGP:egpAlpha(I + 2, 0)   
+            }      
+            
+            EGP:egpMaterial(11, "materials/icon16/folder.png") 
+        }
+        else
+        {
+            EGP:egpMaterial(11, "materials/icon32/folder.png")       
+
+            local VisiblePath = ">e2shared/" + FilePath
+                
+            if(VisiblePath:length() > 32)
+            {
+                VisiblePath = "..." + VisiblePath:sub(VisiblePath:length() - 29, VisiblePath:length())    
+            }
+            
+            EGP:egpSetText(54, VisiblePath)
+        }
+        
+        Page = 0   
+        Up2Date = 0   
+    }
+    
+    function void setLineNumbers(Start)
+    {
+        local Count = ceil(512 / CVConfig["fontsize", number])
+        
+        local Text = ""
+        
+        for(I = Start, min(Start + Count, E2Data:count()))
+        {
+            Text += I + "\n"   
+        }        
+        
+        EGP:egpSetText(5, Text)
+        EGP:egpFont(5,    CVConfig["font", string])
+        EGP:egpSize(5,    CVConfig["fontsize", number])
+        
+        local Length = (Start + Count):toString():length()
+        setSidebar(Length * CVConfig["fontsize", number] - (CVConfig["fontsize", number]/1.95) * (Length - 1))
     }
 
     function void resetText()
     {
         for(I = 1, 12)
         {
-            if(EGP:egpHasObject(I))
-            {
-                EGP:egpSetText(I, "")
-            }   
-            else
-            {
-                addSyntax(I, 1, "", vec())          
-            }           
+            addSyntax(I, "", vec(255))                               
         }
+        LastLineNumbersWidth = 0 #CVConfig["fontsize", number]
+        setTextX(0)
     }
 
     function number table:visualize([Start End]:number)
@@ -194,7 +429,7 @@ if(first())
             
             VLineCounter = Start
             
-            resetText()
+      #      resetText()
             
             CommentsText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
         }
@@ -204,7 +439,7 @@ if(first())
             {                   
                 local Limit = This:count()
                 
-                while(perf())
+                while(perf(90))
                 {
                     local Data = This[VLineCounter, table]
             
@@ -232,21 +467,20 @@ if(first())
             }   
             else
             {
-                local FS = CVConfig["fontsize", number]
                 local Colors = CVConfig["colors", table]
         
-                addSyntax(1,  FS, PPCommandsText,    Colors["ppcommand", vector])       
-                addSyntax(2,  FS, NumbersText,       Colors["number", vector])
-                addSyntax(3,  FS, EnumsText,         Colors["enum", vector])        
-                addSyntax(4,  FS, TypesText,         Colors["type", vector])
-                addSyntax(5,  FS, FunctionsText,     Colors["function", vector])
-                addSyntax(6,  FS, UserFunctionsText, Colors["userfunction", vector])
-                addSyntax(7,  FS, CommentsText,      Colors["comment", vector])        
-                addSyntax(8,  FS, PreprocText,       Colors["preproc", vector])
-                addSyntax(9,  FS, VariablesText,     Colors["variable", vector])
-                addSyntax(10, FS, KeywordsText,      Colors["keyword", vector])
-                addSyntax(11, FS, StringsText,       Colors["string", vector])
-                addSyntax(12, FS, DefaultText,       Colors["unknown", vector])   
+                addSyntax(1, PPCommandsText,    Colors["ppcommand", vector])       
+                addSyntax(2, NumbersText,       Colors["number", vector])
+                addSyntax(3, EnumsText,         Colors["enum", vector])        
+                addSyntax(4, TypesText,         Colors["type", vector])
+                addSyntax(5, FunctionsText,     Colors["function", vector])
+                addSyntax(6, UserFunctionsText, Colors["userfunction", vector])
+                addSyntax(7, CommentsText,      Colors["comment", vector])        
+                addSyntax(8, PreprocText,       Colors["preproc", vector])
+                addSyntax(9, VariablesText,     Colors["variable", vector])
+                addSyntax(10, KeywordsText,     Colors["keyword", vector])
+                addSyntax(11, StringsText,      Colors["string", vector])
+                addSyntax(12, DefaultText,      Colors["unknown", vector])   
                 
                 VLoading = 0
                 
@@ -256,26 +490,40 @@ if(first())
         
         return 0         
     }
-     
+
     # [ ---  Modes --- ] #
     function void dump()
     {
-        E2Parsing = E2Combining = VLoading = VLineCounter = E2Combined = E2Parsed = 0
-        VDone = 1
+        E2Parsing = E2Combining = VLoading = VLineCounter = E2Combined = E2Parsed = PrevX = LastLineIndex = 0
+        VDone = PrevLine = 1 
         
         FileContents = CurrentFile = ""
         
+        CVConfig["curline", number] = 1
+        
+        PrevTextPos = vec2()
+        
         E2Data = E2Events = table()
         
-        resetText()
+        toggleSidebar(0)
+        
+        resetText()  
         
         e2Reset()   
         combineReset()
+    }
+
+    function void visualizeFile(Path:string)
+    {
+        dump()
+        CurrentFile = ">e2shared/" + FilePath + Path + ".txt"  
+        setMode("openFile")        
     }
  
     function void init()
     {
         local Parent = E:isWeldedTo()
+        
         if(Parent:type() == "gmod_wire_egp")
         {
             EGP = Parent:wirelink()        
@@ -284,26 +532,396 @@ if(first())
         {
             error("Not placed on EGP-Screen")   
         }
-           
-        EGP:egpClear()        
-        dump()       
+        
+        EGP:egpClear()  
+ 
+        # Syntax Text super      
+        EGP:egpCircle(1, vec2(), vec2(25))
+        EGP:egpAlpha(1, 255)
+             
+        # Screen Background
+        EGP:egpBox(2, vec2(256,256), vec2(512, 512))
+        EGP:egpColor(2, col("background"))
+ 
+        dump() 
+               
+        # Line Numbers background  
+        EGP:egpBox(3, vec2(10,256), vec2(20, 512))
+        EGP:egpColor(3, col("sbbg"))
+
+        # Line Numbers indicator corner
+        EGP:egpBox(4, vec2(20,256), vec2(1, 512))
+        EGP:egpColor(4, vec(80))
+                       
+        # Line Numbers 
+        EGP:egpTextLayout(5, "", vec2(2.5,0), vec2(999))
+        EGP:egpColor(5, col("linenums"))
+        EGP:egpFont(5, CVConfig["font", string])
+        EGP:egpSize(5, CVConfig["fontsize", number])
+                            
+        setLineNumbers(1)
+        
+        LastToggle = 1
+        toggleSidebar(0)
+              
+        # Progressbar 
+        EGP:egpBox(6, vec2(256,507), vec2(512,10))
+        EGP:egpColor(6, col("sbbg"))
+        
+        EGP:egpBox(7, vec2(0,507), vec2(0,10))
+        EGP:egpColor(7, col("progressbar"))
+                        
+        EGP:egpBoxOutline(8, vec2(256, 508), vec2(512, 10))
+        EGP:egpColor(8, vec(80))  
+                
+        toggleProgressBar(0,0)
+                
+        # File Browser button
+       # EGP:egpBox(9, vec2(512 - 35 / 2,40 / 2), vec2(35,35))
+       # EGP:egpColor(9, col("buttonbg"))
+        
+       # EGP:egpBoxOutline(10, vec2(512 - 35 / 2,40 / 2), vec2(35, 35))
+       # EGP:egpColor(10, vec(100))
+        
+        EGP:egpBox(11, vec2(512 - 32.5 / 2,40 / 2), vec2(25,25))
+        EGP:egpMaterial(11, "materials/icon32/folder.png")
+                
+        EGP:egpBox(12, vec2(), vec2(360))
+        centralize(12)
+        EGP:egpColor(12, col("objectbg"))
+
+        EGP:egpBoxOutline(13, vec2(), vec2(360))
+        centralize(13)
+        EGP:egpColor(13, col("objectol"))
+            
+        # Browser Items
+        local C = 0
+        for(I = BrowserItemsStartIndex, BrowserItemsStartIndex + 10 * 3, 3)
+        {
+            EGP:egpBox(I, vec2(), vec2(300, 20))  
+            EGP:egpAlpha(I, 0)
+            centralize(I, vec2(0,-125 + 28 * C))
+            EGP:egpColor(I, col("listitembg"))
+            
+            EGP:egpText(I + 1, "", vec2(-145,-CVConfig["fontsize", number] * 0.5 - 2.5))
+            EGP:egpFont(I + 1, CVConfig["font", string])
+            EGP:egpParent(I + 1, I)
+            EGP:egpAlpha(I + 1, 0)
+            
+            EGP:egpBoxOutline(I + 2, vec2(), vec2(300,20))
+            EGP:egpParent(I + 2, I)
+            EGP:egpColor(I + 2, col("objectol"))
+            EGP:egpAlpha(I + 2, 0)
+            
+            C++
+        }
+        
+        # Close Browser
+        EGP:egpBox(14, vec2(), vec2(20,20))
+        centralize(14, vec2(180, -180) - vec2(15, -15))
+        EGP:egpMaterial(14, "materials/icon16/cross.png")
+                  
+        # Next Page        
+        EGP:egpBox(49, vec2(), vec2(20,20))
+        centralize(49, vec2(180, 180) - vec2(12.5, 15))
+        EGP:egpMaterial(49, "materials/icon16/resultset_next.png")        
+
+        # Previous Page 
+        EGP:egpBox(50, vec2(), vec2(20,20))
+        centralize(50, vec2(-180, 180) - vec2(-12.5, 15))
+        EGP:egpMaterial(50, "materials/icon16/resultset_previous.png")        
+                      
+        # Last Directory
+        EGP:egpBox(51, vec2(), vec2(20,20))
+        centralize(51, vec2(-180, -180) + vec2(15, 15))
+        EGP:egpMaterial(51, "materials/icon16/arrow_undo.png")        
+
+        # Directory indicator
+        EGP:egpBox(52, vec2(), vec2(280, 25))  
+        centralize(52, vec2(0,-156))
+        EGP:egpColor(52, col("objectbg2"))
+        
+        EGP:egpBoxOutline(53, vec2(), vec2(280, 25))  
+        centralize(53, vec2(0,-156))
+        EGP:egpColor(53, col("objectol"))
+        
+        EGP:egpText(54, "", vec2())
+        EGP:egpFont(54, CVConfig["font", string])  
+        EGP:egpColor(54, vec(150))
+        centralize(54, vec2(-132.5,-165))  
+                              
+        toggleBrowser(0)        
+        
+        # Cancel Parsing Button & Label          
+        EGP:egpBox(55, vec2(), vec2(30,30))
+        centralize(55, vec2(0,20))
+        EGP:egpMaterial(55, "materials/icon16/cancel.png")
+        
+        EGP:egpText(56, "Cancel Parsing?", vec2())
+        centralize(56, vec2(-55,-20))
+        EGP:egpColor(56, vec(150))
+        
+        EGP:egpAlpha(55,0)
+        EGP:egpAlpha(56,0)
+        
         setMode("idle")    
+    }
+    
+    function void updateCursor()
+    {
+        PrevLine    = CVConfig["curline", number] + Cursor:y():mSub(CVConfig["fontsize", number]) / CVConfig["fontsize", number] - 1
+        PrevX       = Cursor:x()
+        PrevTextPos = EGP:egpPos(1)   
     }
     
     function void idle()
     {
         local Open = onArgsChat("open")
+        local Line = onArgsChat("line")
+        local Font = onArgsChat("font")
+        
+        local CodeActive = E2Data:count()
+        
         if(Open)
         {
-            dump()
-            CurrentFile = ">e2shared/" + Open + ".txt"  
-            setMode("openFile")
+            visualizeFile(encodeFilename(Open))
         }        
         elseif(onChat("reset"))
         {
-            sucOut("Reloading...")
             setMode("init")   
         }        
+        elseif(Line)
+        {
+            CVConfig["curline", number] = Line:toNumber()
+            setMode("visualizeData")   
+        }
+        elseif(Font)
+        {
+            local NewFontsize = clamp(Font:toNumber(), 8, 48)
+            CVConfig["fontsize", number] = NewFontsize
+            if(PrevMode == "visualizeData" | PrevMode == "reloadVisualizedData")
+            {
+                setMode("reloadVisualizedData") 
+            }
+        }
+        elseif(onChat("clear"))
+        {
+            if(CodeActive)
+            {
+                dump()
+            }                   
+        }   
+        elseif(onChat("reload"))
+        {
+            if(CodeActive)
+            {
+                setMode("reloadVisualizedData")  
+            }               
+        }
+        elseif(CodeActive)
+        {
+            if(AimEnt == EGP:entity())
+            {
+                if(clicked("E"))
+                {
+                    local Selected = CVConfig["curline", number] + Cursor:y():mSub(CVConfig["fontsize", number]) / CVConfig["fontsize", number] - 1                
+                    
+                    local YDiff = PrevLine - Selected
+                    local XDiff = ceil((PrevX - Cursor:x()) / CVConfig["fontsize", number])
+                    
+                    setTextX(min(PrevTextPos:x() - XDiff * CVConfig["fontsize", number], LastLineNumbersWidth))
+                    
+                    if(YDiff != 0 & CVConfig["curline", number] + YDiff > 0)
+                    {
+                        local Total = ceil(512 / CVConfig["fontsize", number])
+                        
+                        if(CVConfig["curline", number] + YDiff + Total - 2 < E2Data:count())
+                        {
+                            CVConfig["curline", number] = CVConfig["curline", number] + YDiff
+                            setMode("visualizeData")  
+                        }
+                    }  
+                }
+                else
+                {
+                    updateCursor()   
+                }      
+            }                               
+        }
+
+        if(clicked(11))
+        {
+            playSound("click")
+            setMode("openBrowser") 
+        } 
+    }
+    
+    function void openBrowser()
+    {
+        if(!FileListing)
+        {
+            if(fileCanList())
+            {
+                fileList(">e2shared/" + FilePath)
+                FileListing = 1
+            }
+        }
+        else
+        {
+            if(fileListClk() & !fileLoadingList())
+            {
+                FileListing = 0
+                
+                Files = array()                
+                foreach(I, File:string = fileReadList())
+                {
+                    if(File:find(".txt"))
+                    {
+                        Files:pushString(File)   
+                        continue
+                    }
+
+                    Files:insertString(1, File)                    
+                }
+                             
+                toggleBrowser(1)
+                
+                setMode("showBrowser")
+            }  
+        }
+    }
+    
+    function void showBrowser()
+    {
+        updateCursor()
+
+        if(clicked(14))
+        {       
+            playSound("click")
+            FileListing = 0
+            Files = array()            
+            toggleBrowser(0)   
+            setMode("idle")
+        }
+        elseif(clicked(49))
+        {            
+            Page++
+            if(Page >= ceil(Files:count() / 10))
+            {
+                Page--   
+                playSound("error")
+            }
+            else
+            {
+                Up2Date = 0
+                playSound("click")   
+            } 
+        }
+        elseif(clicked(50))
+        {
+            Page--        
+            if(Page < 0)
+            {
+                Page++   
+                playSound("error")                   
+            }
+            else
+            { 
+                Up2Date = 0
+                playSound("click")     
+            }    
+        }
+        elseif(clicked(51))
+        {
+            if(FilePath == "")
+            {
+                playSound("error")
+                return    
+            }   
+            
+            local Directories = FilePath:explode("/")
+            FilePath = FilePath:replace(Directories[Directories:count() - 1, string] + "/", "")
+
+            playSound("click")
+
+            setMode("openBrowser")
+        }
+        else
+        {
+            if(!Up2Date)
+            {
+                local C = 1 + 11 * Page 
+                
+                for(I = BrowserItemsStartIndex, BrowserItemsStartIndex + 10 * 3, 3)
+                {
+                    if(C > Files:count())
+                    {
+                        EGP:egpAlpha(I, 0)
+                        EGP:egpAlpha(I + 1, 0)
+                        EGP:egpAlpha(I + 2, 0)                        
+                        continue    
+                    }
+                    
+                    EGP:egpAlpha(I, 255)
+                    EGP:egpAlpha(I + 1, 255)
+                    EGP:egpAlpha(I + 2, 255)
+                    
+                    local Text = (C + ". " + Files[C, string])
+                    
+                    EGP:egpSetText(I + 1, Text:length() > 36 ? Text:sub(1, 33) + "..." : Text)
+                    
+                    if(Text:index(Text:length()) == "/")
+                    {
+                        EGP:egpColor(I + 1, col("folder"))      
+                    }
+                    else
+                    {
+                        EGP:egpColor(I + 1, col("file"))    
+                    }
+                    
+                    C++
+                }            
+                
+                Up2Date = 1   
+            }
+            else
+            {
+                local C = 1 + 11 * Page 
+                
+                for(I = BrowserItemsStartIndex, BrowserItemsStartIndex + 10 * 3, 3)
+                {    
+                    if(clicked(I))
+                    {
+                        local Text = Files[C, string]
+                        
+                        if(!Text)
+                        {
+                            break   
+                        }
+                        
+                        if(Text:index(Text:length()) == "/")
+                        {
+                            Files = array()
+                            FileListing = 0
+                            FilePath += Text 
+                            playSound("click")
+                            setMode("openBrowser") 
+                        }
+                        else
+                        {
+                            visualizeFile(Text:replace(".txt", ""))
+                            FileListing = 0
+                            Files = array()            
+                            toggleBrowser(0)   
+                        }
+                        
+                        break
+                    }     
+                 
+                    C++           
+                }      
+            }
+        }         
     }
     
     function void openFile()
@@ -316,12 +934,16 @@ if(first())
                 {
                     dump()
                     setMode("idle")
-                    errOut("Cannot parse Files with character count exceeding 59k.")
+                    errOut("Cannot parse Files with character count exceeding 58kb.")
                     break    
                 }
                             
                 FileContents = Contents
                 sucOut("File Loaded.")
+                
+                EGP:egpAlpha(55,255)
+                EGP:egpAlpha(56,255)
+      
                 setMode("parseContents")
             break   
         
@@ -353,8 +975,8 @@ if(first())
             {
                 sucOut("E2 Parsed.")
                 E2Events = E2Result
-                E2Parsed = 1   
-            }   
+                E2Parsed = 1
+            }
         }
         else
         {
@@ -374,31 +996,86 @@ if(first())
             }
             else
             {
-                sucOut("Preperations completed.")
                 setName("Codeviewer - V2")
+                
+                toggleProgressBar(0,0)
+
+                EGP:egpAlpha(55,0)
+                EGP:egpAlpha(56,0)
+                
+                toggleSidebar(1)     
+                setLineNumbers(1) 
+                EGP:egpPos(1,  vec2(LastLineNumbersWidth + 2.5, 0))      
+                                 
                 setMode("visualizeData")  
+                
                 return
             }
         }
         
-        if(realtime() % 0.1 == 0)
+        if(clicked(55))
+        {
+            setName("Codeviewer - V2")
+            
+            playSound("click")
+            
+            toggleProgressBar(0, 0)
+            toggleSidebar(1)     
+            setLineNumbers(1) 
+            
+            EGP:egpPos(1,  vec2(LastLineNumbersWidth + 2.5, 0))      
+       
+            EGP:egpAlpha(55,0)
+            EGP:egpAlpha(56,0)
+            
+            dump()
+            
+            setMode("idle")                                
+        }
+        
+        if(floor(realtime(), 1) % 0.2 == 0)
         {
             local TotalProgress = floor(combineProgress() / 2 + e2Progress() / 2, 2)
-            setName("Codeviewer - V2\n\nStatus: " + Status + "\nProgress: " +  Progress + "\n\nTotal Progress: " + TotalProgress)
+            toggleProgressBar(1, TotalProgress)
+            setName("Codeviewer - V2\n\nStatus: " + Status + "\nProgress: " +  Progress + "%\n\nTotal Progress: " + TotalProgress + "%")
         }
+    }
+
+    function void reloadVisualizedData()
+    {
+        local Total = ceil(512 / CVConfig["fontsize", number])
+        local N = CVConfig["curline", number]
+        
+        setLineNumbers(N) 
+        
+        if(E2Data:visualize(N, N + Total))
+        {
+            setMode("idle")   
+            LastLineIndex = N
+        }                  
     }
     
     function void visualizeData()
     {
-        if(E2Data:visualize(1, ceil(512 / CVConfig["fontsize", number])))
+        local Total = ceil(512 / CVConfig["fontsize", number])
+        local N = CVConfig["curline", number]
+        
+        setLineNumbers(N) 
+
+        if(E2Data:visualize(N, N + Total))
         {
             setMode("idle")   
-        }
+            LastLineIndex = N
+        }               
     }
+    
+    sucOut("Initialized.")
 } 
 elseif(last())
 {
     EGP:egpClear()   
 }
 
+setUser(owner())
+   
 Mode()

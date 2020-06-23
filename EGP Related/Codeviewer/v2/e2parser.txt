@@ -84,7 +84,7 @@ if(first())
         }
         else
         {
-            while(perf(50))
+            while(perf(80))
             {
                 if(!CombineLC & !CombineEC)
                 {
@@ -309,7 +309,7 @@ if(first())
     function string readUntilEndOfLine()
     {
         local R = ""
-        for(I = Buffer, 9999)
+        for(I = Buffer, inf())
         {
             local N = readNext()
             if(N == "\n")
@@ -503,7 +503,7 @@ if(first())
         }
         else
         {
-            while(perf(50))
+            while(perf(80))
             {
                 local C = readNext()
                 
@@ -512,7 +512,18 @@ if(first())
                 {
                     if(Builder != "")
                     {
-                        event("", Builder)   
+                        if(InComment)
+                        {
+                            event("comment", Builder)                               
+                        }
+                        elseif(InString)
+                        {                            
+                            event("string", Builder)   
+                        }
+                        else
+                        {
+                            event("", Builder)   
+                        }
                     }
                     
                     Parsing = 0
@@ -658,6 +669,12 @@ if(first())
                                 {
                                     nextLine()   
                                 }
+                                else
+                                {
+                                  #  local Rest = readCur() + readUntilEndOfLine()
+                                  #  event("function", Rest)
+                                  #  nextLine()
+                                }
                             }
                             elseif(Lookup == "#include")
                             {
@@ -785,7 +802,14 @@ if(first())
                             }                    
                             elseif(readCur() == "]" | readCur() == " " | readCur() == "" | readCur() == ":" | readCur() == ")" | readCur() == "," | getNext() == "\n")
                             {
-                                event("type", Unknown)   
+                                if(getPrevEvent(1)["type", string] == "ppcommand")
+                                {
+                                    event("function", Unknown)  
+                                }
+                                else
+                                {
+                                    event("type", Unknown)   
+                                }
                             }    
                         } 
                     }                        
