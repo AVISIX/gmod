@@ -26,6 +26,13 @@
 
 #@model models/hunter/blocks/cube05x05x05.mdl
 
+#[
+    This code was written by Sixmax (STEAM_0:0:104139026).
+    
+    You may use this in your projects but not claim it as yours (Check License: https://github.com/Sixmax/gmod/blob/master/license.txt)
+    Abuse may cause an inconvenience on your and my side. So please respect my work and follow the licensing.
+]#
+
 interval(60)
 
 AimEnt = User:aimEntity()
@@ -69,7 +76,7 @@ if(first())
             "objectol"    = vec(80,80,85),
                 
             "folder"      = vec(229,214,6),
-            "file"        = vec(66,147,209),
+            "file"        = vec(118,139,193),
                 
             "listitembg"  = vec(60,60,65),
                 
@@ -623,12 +630,12 @@ if(first())
                   
         # Next Page        
         EGP:egpBox(49, vec2(), vec2(20,20))
-        centralize(49, vec2(180, 180) - vec2(12.5, 15))
+        centralize(49, vec2(180, 180) - vec2(12.5, 17))
         EGP:egpMaterial(49, "materials/icon16/resultset_next.png")        
 
         # Previous Page 
         EGP:egpBox(50, vec2(), vec2(20,20))
-        centralize(50, vec2(-180, 180) - vec2(-12.5, 15))
+        centralize(50, vec2(-180, 180) - vec2(-14.5, 17))
         EGP:egpMaterial(50, "materials/icon16/resultset_previous.png")        
                       
         # Last Directory
@@ -943,7 +950,8 @@ if(first())
                 
                 EGP:egpAlpha(55,255)
                 EGP:egpAlpha(56,255)
-      
+                EGP:egpAlpha(11, 0)  
+    
                 setMode("parseContents")
             break   
         
@@ -1003,6 +1011,8 @@ if(first())
                 EGP:egpAlpha(55,0)
                 EGP:egpAlpha(56,0)
                 
+                EGP:egpAlpha(11, 255) 
+                
                 toggleSidebar(1)     
                 setLineNumbers(1) 
                 EGP:egpPos(1,  vec2(LastLineNumbersWidth + 2.5, 0))      
@@ -1027,6 +1037,7 @@ if(first())
        
             EGP:egpAlpha(55,0)
             EGP:egpAlpha(56,0)
+            EGP:egpAlpha(11, 255) 
             
             dump()
             
