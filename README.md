@@ -1,2 +1,3 @@
-# gmod
-Mostly Expression 2 codes 
+# My public GMod projects
+
+The repository where I put my released projects.
