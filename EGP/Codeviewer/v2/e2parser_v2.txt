@@ -1,13 +1,13 @@
 @name E2Parser - V2
 
 # [ --- Config --- ] #
-@persist OpsLimit CpuLimit ReplaceSpacesWithTilde ShowLineBreak
+@persist OpsLimit CpuLimit
 
 # [ --- Misc --- ] # 
 @persist 
 
 # [ --- Parser --- ] #
-@persist [Parsing Size] [Buffer LineCounter] [InComment InString] 
+@persist [Parsing Size] [Buffer LineCounter InLineBuffer] [InComment InString] 
 @persist [Result EventHistory Userfunctions]:table
 @persist [Keywords Types]:array
 @persist [Task Builder BlockType BlockEvent]:string
@@ -19,11 +19,8 @@
 if(first())
 {    
     # [ --- Config --- ] #
-    OpsLimit = 999999
-    CpuLimit = 999999
-    
-    ReplaceSpacesWithTilde = 0
-    ShowLineBreak          = 0
+    OpsLimit = 100000
+    CpuLimit = 7000
     
     Keywords = array(
         "function", 
@@ -62,15 +59,12 @@ if(first())
         "void", 
         "normal", 
         "bone", 
-        "quaternion"
+        "ranger",
+        "quaternion",
+        "effect"
     )
     
     # [ --- Helpers --- ] #
-    function void warning(Output:string)
-    {
-        printColor(vec(255), "[",vec(255,255,0), "Warning", vec(255), "] ", vec(255,0,0), Output)    
-    }
-
     function number string:isUpper()
     {
         local B = toByte(This)        
@@ -99,22 +93,12 @@ if(first())
         return !This:isLetter() & !This:isNumber()
     }
 
-    function string string:last()
-    {
-        return This:index(This:length())   
-    }
-
     # [ --- Parser --- ] #
     function string readNext()
     {
+        InLineBuffer++
         Buffer++
         return Task:index(Buffer)
-    }
-    
-    function string readPrev()
-    {
-        Buffer--
-        return Task:index(Buffer)  
     }
     
     function string getNext()
@@ -148,9 +132,14 @@ if(first())
             "function"     = "",
             "enum"         = "",
             "ppcommand"    = "",
-            "default"      = ""
+            "default"      = "",
+            
+            "error"        = "",
+            
+            "tabspc"       = ""
         )    
         
+        InLineBuffer = 0
         EventHistory = table()  
     }
   
@@ -166,6 +155,7 @@ if(first())
         }
         
         local Spaced = Txt:replaceRE(".", " ")         
+        
         foreach(I, K:string = Result[LineCounter, table]:keys())
         {
             if(K == T)
@@ -201,19 +191,19 @@ if(first())
 
     function void resetE2()
     {
-        Task = ""
+        Task         = ""
         LineCounter  = 0
         Size         = 0
         Buffer       = 0
         Result       = table()
         EventHistory = table()
         Userfunction = table()    
-        Parsing = 0
-        BlockType = ""
-        BlockEvent = ""
+        Parsing      = 0
+        BlockType    = ""
+        BlockEvent   = ""
     }
     
-    function table string:parseE2()
+    function table string:parseE2(ReplaceSpacesWithTilde, ShowLineBreak)
     {
         if(!Parsing)
         {
@@ -231,7 +221,7 @@ if(first())
         }
         else
         {
-            while(perf())
+            while(perf() & ops() < OpsLimit & cpuUsage() * 1000000 < CpuLimit)
             {
                 #[
                     Result:
@@ -246,7 +236,8 @@ if(first())
                             userfunction: "" 
                             function: "" 
                             enum: "" 
-                            ppcommand: "" 
+                            ppcommand: ""
+                            tabspc: ""
                             default: ""
                 ]# 
 
@@ -283,7 +274,13 @@ if(first())
                         if(Builder != "")
                         {
                             event("", Builder)
-                        }                        
+                        }                  
+                        
+                        if(ShowLineBreak)
+                        {
+                            event("tabspc", ";")   
+                        }
+                              
                         newLine()
                         continue   
                     }
@@ -397,6 +394,33 @@ if(first())
                         
                         block("cst", "enum")                               
                     }
+                    
+                    # [ --- Tab Space Indicator --- ] #
+                    elseif(ReplaceSpacesWithTilde & C == " " & getPrev() == "\n")
+                    {                        
+                        if(Builder != "")
+                        {
+                            event("", Builder)
+                        }            
+                                        
+                        block("vc", "tabspc")   
+                    }
+                    
+                    # [ --- Errors --- ] #
+                    else
+                    {
+                        #[
+                        if(!C:isSpecial())
+                        {
+                            if(Builder != "")
+                            {
+                                event("", Builder)
+                            }        
+                            
+                            block("spec", "error")       
+                        } 
+                        ]#  
+                    }
                 }
                 
                 local Yield = 0
@@ -410,6 +434,7 @@ if(first())
                         {
                             event(BlockEvent, Builder)
                         }
+                        
                         newLine()
                         unblock()
                         continue
@@ -446,81 +471,119 @@ if(first())
                         break
                         
                         # [ --- Block Until End of Keyword, Function or Userfunction --- ] #
-                        case "404",
-                        if(getNext():isSpecial() & getNext() != "_")
+                        case "404",                        
+                        if(1)
                         {
-                            Builder += C
-                            
-                            local IsKeyword = 0     
-                                                                           
-                            foreach(I, Keyword:string = Keywords)
+                            local N = getNext()
+                        
+                            if(N:isSpecial() & N != "_")
                             {
-                                if(Builder == Keyword)
-                                {
-                                    IsKeyword = 1
-                                    break   
-                                }   
-                            }
-                            
-                            if(IsKeyword)
-                            { 
-                                event("keyword", Builder)
-                                unblock()
-                            }
-                            else
-                            {   
-                                local N = getNext()
+                                Builder += C
                                 
-                                if(N == "]" | N == ")" | N == "," | N == ":" | N == " " | N == "\n")
+                                local IsKeyword = 0     
+                                                                               
+                                foreach(I, Keyword:string = Keywords)
                                 {
-                                    if(prevEvent(1)["type", string] == "function" | prevEvent(1)["type", string] == "ppcommand") # ifdef number:myFunction(number)
+                                    if(Builder == Keyword)
                                     {
-                                        event("function", Builder) 
-                                    }
-                                    else
-                                    {
-                                        event("type", Builder) 
-                                    }                                              
+                                        IsKeyword = 1
+                                        break   
+                                    }   
+                                }
+                                
+                                if(IsKeyword)
+                                { 
+                                    event("keyword", Builder)                                    
                                 }
                                 else
-                                {
-                                    if(N == "(")
+                                {                                       
+                                    if(N == "]" | N == ")" | N == "," | N == ":" | N == " " | N == "\n")
                                     {
-                                        local POne   = prevEvent(1)
-                                        local PThree = prevEvent(3)
-                                        
-                                        if(Userfunctions:exists(Builder))
-                                        {
-                                            event("userfunction", Builder)   
-                                        }
-                                        elseif(POne["type", string] == "keyword" & POne["text", string] == "function") # function myFunction()
-                                        {
-                                            event("userfunction", Builder)   
-                                        }
-                                        elseif(POne["type", string] == "type" & PThree["type", string] == "type" & prevEvent(5)["text", string] == "function") # function void entity:myFunction()
-                                        {
-                                            event("userfunction", Builder)   
-                                        }
-                                        elseif(POne["type", string] == "type" & PThree["text", string] == "function") # function void myunction() & function entity:myFunction()
-                                        {
-                                            event("userfunction", Builder)  
-                                        }
-                                        else
+                                        if(prevEvent(1)["type", string] == "function" | prevEvent(1)["type", string] == "ppcommand") # ifdef number:myFunction(number)
                                         {
                                             event("function", Builder) 
                                         }
+                                        else
+                                        {
+                                            local IsType = 0
+                                            
+                                            foreach(I, Type:string = Types)
+                                            {
+                                                if(Type == Builder)
+                                                {
+                                                    IsType = 1
+                                                    break   
+                                                }       
+                                            }
+                                            
+                                            if(IsType)
+                                            {
+                                                event("type", Builder)
+                                            }
+                                            else
+                                            {
+                                                event("error", Builder)
+                                            }
+                                        }                                              
                                     }
                                     else
                                     {
-                                        event("", Builder)
-                                    } 
+                                        if(N == "(")
+                                        {
+                                            local POne   = prevEvent(1)
+                                            local PThree = prevEvent(3)
+                                            
+                                            if(Userfunctions:exists(Builder))
+                                            {
+                                                event("userfunction", Builder)   
+                                            }
+                                            elseif(POne["type", string] == "keyword" & POne["text", string] == "function") # function myFunction()
+                                            {
+                                                event("userfunction", Builder)   
+                                            }
+                                            elseif(POne["type", string] == "type" & PThree["type", string] == "type" & prevEvent(5)["text", string] == "function") # function void entity:myFunction()
+                                            {
+                                                event("userfunction", Builder)   
+                                            }
+                                            elseif(POne["type", string] == "type" & PThree["text", string] == "function") # function void myunction() & function entity:myFunction()
+                                            {
+                                                event("userfunction", Builder)  
+                                            }
+                                            else
+                                            {
+                                                event("function", Builder) 
+                                            }
+                                        }
+                                        else
+                                        {
+                                            local IsType = 0
+                                            
+                                            foreach(I, Type:string = Types)
+                                            {
+                                                if(Type == Builder)
+                                                {
+                                                    IsType = 1
+                                                    break   
+                                                }       
+                                            }
+                                            
+                                            if(IsType)
+                                            {
+                                                event("type", Builder)
+                                            }
+                                            else
+                                            {
+                                                event("error", Builder)
+                                            }
+                                        } 
+                                    }                        
                                 }
-                               
-                                unblock()                            
-                            }
-                            
-                            Yield = 1                                                                                           
-                        }                        
+                                
+                                unblock()   
+                                                             
+                                Yield = 1                                                                                           
+                            }        
+                        }                
                         break
                         
                         # [ --- Block Until End of Number --- ] #
@@ -540,6 +603,26 @@ if(first())
                             unblock()                                     
                         }
                         break
+                        
+                        # [ --- Block Until Valid Char --- ] #
+                        case "vc",
+                        if(1){
+                            local N = getNext()
+                            if(N != " ")
+                            {
+                                Builder += C                                
+                                event(BlockEvent, Builder:replaceRE("    ", "   ~"))
+                                unblock()   
+                                Yield = 1
+                            }
+                        }
+                        break
+                        
+                        # [ --- Block Until Special Char --- ] #
+                        #[
+                        case "spec",
+                        
+                        break]#
                     }                
                 }
                 elseif(InComment)
@@ -602,7 +685,7 @@ if(first())
 
     function number e2Progress()
     {
-        return (100 / Size) * Buffer
+        return floor((100 / Size) * Buffer, 2)
     }
 
 
@@ -648,7 +731,7 @@ if(first())
         {
             if(!E2ParsingDone)
             {
-                local Result = fileRead():parseE2()
+                local Result = fileRead():parseE2(1,1)
                 
                 setName("Prog: " + e2Progress() + "%")
                 

@@ -19,7 +19,7 @@
 
 # [ --- Visualizer --- ] #
 @persist VLoading VLineCounter VDone TextStartingIndex
-@persist [PreprocText CommentsText StringsText KeywordsText VariablesText TypesText NumbersText UserFunctionsText FunctionsText EnumsText PPCommandsText DefaultText]:string
+@persist [PreprocText CommentsText StringsText KeywordsText VariablesText TypesText NumbersText UserFunctionsText FunctionsText EnumsText PPCommandsText DefaultText TabSpaceText ErrorText]:string
 
 # [ --- File Browser --- ] #
 @persist FileListing Files:array BrowserActive SavedCursor:vector2 Page Up2Date BrowserItemsStartIndex FilePath:string
@@ -52,7 +52,7 @@ if(first())
         
     CVConfig = table(
         "chatprefix" = "/",
-        "debug"      = 0,
+        "debug"      = 1,
         "curline"    = 1,
         
         "font"       = "Consolas",
@@ -85,7 +85,10 @@ if(first())
             "function"     = vec(160,160,240),
             "ppcommand"    = vec(240,96,240),
             "userfunction" = vec(102,122,102),
-            "unknown"      = vec(255)
+            "unknown"      = vec(255),
+            
+            "tabspc"       = vec(75),
+            "error"        = vec(255,0,0)
         ),
         
         "sounds" = table(
@@ -415,7 +418,7 @@ if(first())
 
     function void resetText()
     {
-        for(I = 1, 12)
+        for(I = 1, 14)
         {
             addSyntax(I, "", vec(255))                               
         }
@@ -432,7 +435,7 @@ if(first())
             
             VLineCounter = Start
           
-            CommentsText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
+            CommentsText = ErrorText = TabSpaceText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
         }
         else
         {         
@@ -456,7 +459,10 @@ if(first())
                     PPCommandsText    += Data["ppcommand",    string] + "\n"
                     UserFunctionsText += Data["userfunction", string] + "\n"
                     VariablesText     += Data["variable",     string] + "\n"
-                
+                        
+                    ErrorText    += Data["error", string]  + "\n"
+                    TabSpaceText += Data["tabspc", string] + "\n"
+                        
                     VLineCounter++
                     
                     if(VLineCounter > End)
@@ -481,7 +487,10 @@ if(first())
                 addSyntax(9, VariablesText,     Colors["variable", vector])
                 addSyntax(10, KeywordsText,     Colors["keyword", vector])
                 addSyntax(11, StringsText,      Colors["string", vector])
-                addSyntax(12, DefaultText,      Colors["unknown", vector])   
+                addSyntax(12, DefaultText,      Colors["unknown", vector])  
+                 
+                addSyntax(13, TabSpaceText,      Colors["tabspc", vector])  
+                addSyntax(14, ErrorText,      Colors["error", vector])  
 
                 VLoading = 0
                 
@@ -699,7 +708,7 @@ if(first())
         {
             local NewFontsize = clamp(Font:toNumber(), 8, 48)
             CVConfig["fontsize", number] = NewFontsize
-            if(PrevMode == "visualizeData" | PrevMode == "reloadVisualizedData")
+            if(CodeActive)
             {
                 setMode("reloadVisualizedData") 
             }
@@ -959,7 +968,7 @@ if(first())
         
         if(!E2Parsed)
         {
-            local Result = FileContents:parseE2()
+            local Result = FileContents:parseE2(1,1)
             
             Status = "Parsing..."
             Progress = e2Progress()
@@ -981,6 +990,7 @@ if(first())
                 
                 toggleSidebar(1)     
                 setLineNumbers(1) 
+                
                 EGP:egpPos(1,  vec2(LastLineNumbersWidth + 2.5, 0))      
                                  
                 setMode("visualizeData")  
@@ -1012,9 +1022,8 @@ if(first())
         
         if(floor(realtime(), 1) % 0.2 == 0)
         {
-            local TotalProgress = floor(e2Progress(), 2)
-            toggleProgressBar(1, TotalProgress)
-            setName("Codeviewer - V2\n\nStatus: " + Status + "\nProgress: " +  Progress + "%\n\nTotal Progress: " + TotalProgress + "%")
+            toggleProgressBar(1, Progress)
+            setName("Codeviewer - V2\n\nStatus: " + Status + "\nProgress: " +  Progress + "%")
         }
     }
 
@@ -1055,4 +1064,14 @@ elseif(last())
 
 setUser(owner())
    
+if(1)
+{
+    local NewCpuLimit = onArgsChat("cpu")
+    if(NewCpuLimit)
+    {
+        CpuLimit = NewCpuLimit:toNumber()
+        sucOut("CPU-Limit changed to: " + CpuLimit)
+    }   
+}
+
 Mode()
