@@ -26,6 +26,13 @@
 
 #@model models/hunter/blocks/cube05x05x05.mdl
 
+#[
+    This code was written by Sixmax (STEAM_0:0:104139026).
+    
+    You may use this in your projects but not claim it as yours (Check License: https://github.com/Sixmax/gmod/blob/master/license.txt)
+    Abuse may cause an inconvenience on your and my side. So please respect my work and follow the licensing.
+]#
+
 interval(60)
 
 AimEnt = User:aimEntity()
@@ -34,7 +41,7 @@ if(first())
 {   
     E = entity()
     
-    setName("Codeviewer - V2.5")
+    setName("Codeviewer - V2")
     
     runOnChat(1)
     runOnLast(1)
@@ -43,7 +50,6 @@ if(first())
     # [ --- To Do --- ] #
     #[
         - Beim Scrollen fehlende Teile laden, anstatt alles. (Zurzeit wird alles neu geladen, das, wenn moeglich, vermeiden)
-        - Whitelist hinzufuegen
     ]#
     
     
@@ -102,10 +108,8 @@ if(first())
     TextStartingIndex = 100
         
     # [ --- Misc --- ] #
-   # #include "libraries/e2parser"
+    #include "libraries/e2parser"
    
-    #include "libraries/e2parser_v2"
-
     function void playSound(Sound:string)
     {
         EGP:entity():soundPlay(randint(1,255), 1, CVConfig["sounds", table][Sound, string])   
@@ -431,7 +435,9 @@ if(first())
             VDone    = 0
             
             VLineCounter = Start
-          
+            
+      #      resetText()
+            
             CommentsText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
         }
         else
@@ -445,7 +451,7 @@ if(first())
                     local Data = This[VLineCounter, table]
             
                     PreprocText       += Data["preproc",      string] + "\n"                       
-                    DefaultText       += Data["default",      string] + "\n"
+                    DefaultText       += Data["unknown",      string] + "\n"
                     CommentsText      += Data["comment",      string] + "\n"
                     StringsText       += Data["string",       string] + "\n"
                     EnumsText         += Data["enum",         string] + "\n"
@@ -482,7 +488,7 @@ if(first())
                 addSyntax(10, KeywordsText,     Colors["keyword", vector])
                 addSyntax(11, StringsText,      Colors["string", vector])
                 addSyntax(12, DefaultText,      Colors["unknown", vector])   
-
+                
                 VLoading = 0
                 
                 return 1                 
@@ -510,7 +516,8 @@ if(first())
         
         resetText()  
         
-        resetE2()
+        e2Reset()   
+        combineReset()
     }
 
     function void visualizeFile(Path:string)
@@ -929,7 +936,15 @@ if(first())
         local Contents = loadFile(CurrentFile)
         switch(Contents)
         {
-            default,    
+            default,
+                if(Contents:length() > 59000)
+                {
+                    dump()
+                    setMode("idle")
+                    errOut("Cannot parse Files with character count exceeding 58kb.")
+                    break    
+                }
+                            
                 FileContents = Contents
                 sucOut("File Loaded.")
                 
@@ -956,20 +971,39 @@ if(first())
     {
         local Status = ""
         local Progress = 0
-        
+  
         if(!E2Parsed)
         {
-            local Result = FileContents:parseE2()
+            FileContents:parseE2()
             
             Status = "Parsing..."
             Progress = e2Progress()
             
-            if(Result)
+            if(e2Done())
             {
                 sucOut("E2 Parsed.")
-                
-                E2Data = Result
-
+                E2Events = E2Result
+                E2Parsed = 1
+            }
+        }
+        else
+        {
+            if(!E2Combined)
+            {
+                E2Events:combineE2Result()
+                   
+                Status = "Combining..."
+                Progress = combineProgress()
+                            
+                if(combineDone())
+                {
+                    sucOut("Events Combined.")
+                    E2Data = CombineResult
+                    E2Combined = 1
+                }   
+            }
+            else
+            {
                 setName("Codeviewer - V2")
                 
                 toggleProgressBar(0,0)
@@ -986,9 +1020,9 @@ if(first())
                 setMode("visualizeData")  
                 
                 return
-            }               
+            }
         }
-
+        
         if(clicked(55))
         {
             setName("Codeviewer - V2")
@@ -1012,7 +1046,7 @@ if(first())
         
         if(floor(realtime(), 1) % 0.2 == 0)
         {
-            local TotalProgress = floor(e2Progress(), 2)
+            local TotalProgress = floor(combineProgress() / 2 + e2Progress() / 2, 2)
             toggleProgressBar(1, TotalProgress)
             setName("Codeviewer - V2\n\nStatus: " + Status + "\nProgress: " +  Progress + "%\n\nTotal Progress: " + TotalProgress + "%")
         }
