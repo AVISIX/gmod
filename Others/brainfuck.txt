@@ -1,0 +1,149 @@
+@name Brainfuck
+@persist HelloWorld:string Interpreted
+
+@persist Buffer Running
+@persist Script:string
+@persist Result:string
+
+@persist Cells:table Loops:table
+@persist Pointer
+
+#[
+    Simple Brainfuck Interpreter lol
+]#
+
+if( first() )
+{
+    runOnTick(1)
+    
+    HelloWorld = ">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+."  
+     
+    function string readNext()
+    {
+        Buffer++
+        return Script:index(Buffer)
+    }
+    
+    function string string:bfRun(Memorysize, MaxReLoops, ThrowErrors)
+    {
+        if(!Running)
+        {
+            Cells = table()
+            Loops = table()
+            Pointer = 0
+            Buffer = 0
+            Result = ""
+            Script = This
+            Running = 1    
+        }
+        else
+        {
+            while(perf())
+            {
+                local C = readNext()
+
+                if(Buffer > Script:length())
+                {
+                    Running = 0
+                    return Result 
+                }
+                
+                switch(C)
+                {
+                    case ">", 
+                    Pointer++ 
+                    
+                    if(Pointer > Memorysize)
+                    {
+                        error("Pointer went past memorylimit!")   
+                    }
+                    break           
+                            
+                    case "<", 
+                    Pointer--
+                    
+                    if(Pointer < 0 & ThrowErrors)
+                    {
+                        error("Pointer went below cell 0!")   
+                    }
+                    break    
+                                                        
+                    case "+", 
+                    Cells[Pointer, number] = Cells[Pointer, number] + 1
+                    break               
+                         
+                    case "-", 
+                    Cells[Pointer, number] = Cells[Pointer, number] - 1 
+                    break   
+                                                          
+                    case ".", 
+                    Result += toChar(Cells[Pointer, number]) 
+                    break  
+                                    
+                    case ",", 
+                    Cells[Pointer, number] = toByte(Result:index(Result:length())) 
+                    break
+              
+                    case "[",   
+                    Loops:pushTable(table("pos"=Buffer, "reloops"=0))
+                    break
+                    
+                    case "]",
+                    if(Cells[Pointer, number] != 0)
+                    {                     
+                        local LC = Loops:count()
+                        Loops[LC, table]["reloops", number] = Loops[Loops:count(), table]["reloops", number] + 1
+                        if(Loops[LC, table]["reloops", number] <= MaxReLoops)
+                        {                            
+                            Buffer = Loops[LC, table]["pos", number]
+                        }
+                        else
+                        {
+                            if(ThrowErrors)
+                            {
+                                error("Loop at position " + Buffer + " reached max re-looping amount.")                                   
+                            }
+                            
+                            Loops:removeNumber(Loops:count()) 
+                        }
+                    }
+                    else
+                    {
+                        Loops:removeNumber(Loops:count())
+                    }
+                    break            
+                }              
+            }
+        }
+        
+        return ""        
+    }
+    
+    function void bfReset()
+    {
+        Cells = table()
+        Loops = table()
+        Pointer = 0
+        Buffer = 0
+        Result = ""
+        Script = ""
+        Running = 0               
+    }
+    
+    Interpreted = 0
+}
+
+if(!Interpreted)
+{
+    local R = HelloWorld:bfRun(1000, 1000, 1)
+    if(R != "")
+    {
+        setName(R)
+        print(R)
+        Interpreted = 1   
+    }
+    else
+    {
+        setName((100 / Script:length()) * Buffer+"")   
+    }
+}
