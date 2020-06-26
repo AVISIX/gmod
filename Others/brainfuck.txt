@@ -1,12 +1,12 @@
 @name Brainfuck
-@persist HelloWorld:string Interpreted
+@persist TestScript:string Interpreted
 
 @persist Buffer Running
 @persist Script:string
 @persist Result:string
 
 @persist Cells:table Loops:table
-@persist Pointer
+@persist Pointer AwaitInput
 
 #[
     Simple Brainfuck Interpreter lol
@@ -14,9 +14,15 @@
 
 if( first() )
 {
+    runOnChat(1)
     runOnTick(1)
+
+    #[
+        Hello World = >++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+.
+        Print Input = ,[.,]
+    ]#  
     
-    HelloWorld = ">++++++++[<+++++++++>-]<.>++++[<+++++++>-]<+.+++++++..+++.>>++++++[<+++++++>-]<++.------------.>++++++[<+++++++++>-]<+.<.+++.------.--------.>>>++++[<++++++++>-]<+."  
+    TestScript = ",[.,]"  
      
     function string readNext()
     {
@@ -24,7 +30,7 @@ if( first() )
         return Script:index(Buffer)
     }
     
-    function string string:bfRun(Memorysize, MaxReLoops, ThrowErrors)
+    function number string:bfRun(Memorysize, MaxReLoops, DebugMode, ThrowErrors, Sender:entity)
     {
         if(!Running)
         {
@@ -32,20 +38,32 @@ if( first() )
             Loops = table()
             Pointer = 0
             Buffer = 0
+            AwaitInput = 0
             Result = ""
             Script = This
             Running = 1    
         }
         else
-        {
+        {            
+            if(AwaitInput & chatClk(Sender))
+            {
+                Cells[Pointer, number] = toByte(lastSaid())
+                AwaitInput = 0
+            }
+            
             while(perf())
             {
+                if(AwaitInput)
+                {
+                    continue
+                }
+                
                 local C = readNext()
 
                 if(Buffer > Script:length())
                 {
                     Running = 0
-                    return Result 
+                    return 1
                 }
                 
                 switch(C)
@@ -76,12 +94,20 @@ if( first() )
                     Cells[Pointer, number] = Cells[Pointer, number] - 1 
                     break   
                                                           
-                    case ".", 
-                    Result += toChar(Cells[Pointer, number]) 
+                    case ".",
+                    #ifdef chatPrint(entity, string)
+                    chatPrint(owner(), toChar(Cells[Pointer, number]))
+                    #else
+                    print(toChar(Cells[Pointer, number])) 
+                    #endif                     
                     break  
                                     
                     case ",", 
-                    Cells[Pointer, number] = toByte(Result:index(Result:length())) 
+                    if(DebugMode)
+                    {
+                        print("Awaiting Input.") 
+                    }
+                    AwaitInput = 1
                     break
               
                     case "[",   
@@ -116,7 +142,7 @@ if( first() )
             }
         }
         
-        return ""        
+        return 0     
     }
     
     function void bfReset()
@@ -135,15 +161,9 @@ if( first() )
 
 if(!Interpreted)
 {
-    local R = HelloWorld:bfRun(1000, 1000, 1)
-    if(R != "")
+    if(TestScript:bfRun(1000, 1000, 1, 1, owner()))
     {
-        setName(R)
-        print(R)
+        print("Done")
         Interpreted = 1   
-    }
-    else
-    {
-        setName((100 / Script:length()) * Buffer+"")   
     }
 }
