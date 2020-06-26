@@ -1,4 +1,4 @@
-@name Codeviewer - V2
+@name Codeviewer - V3
 
 # [ --- Config --- ] #
 @persist CVConfig:table Name:string
@@ -32,7 +32,7 @@ AimEnt = User:aimEntity()
 
 if(first())
 {   
-    Name = "Codeviewer - V2.5"
+    Name = "Codeviewer - V3"
     
     E = entity()
     
@@ -44,7 +44,6 @@ if(first())
     
     # [ --- To Do --- ] #
     #[
-        - Beim Scrollen fehlende Teile laden, anstatt alles. (Zurzeit wird alles neu geladen, das, wenn moeglich, vermeiden) ---> addLineToContext(n) & removeLineFromContext(n)
         - Whitelist hinzufuegen
         - Unten rechts Text platzieren, mit dem filenamen als text
     ]#
@@ -206,7 +205,9 @@ if(first())
 
     function number hovering(Element)
     {
-        return inrange(Cursor, EGP:egpPos(Element) - EGP:egpSize(Element), EGP:egpPos(Element) + EGP:egpSize(Element))     
+        local Pos  = EGP:egpPos(Element)
+        local Size = EGP:egpSize(Element)
+        return inrange(Cursor, Pos - Size / 2, Pos + Size / 2)     
     }
 
     function number clicked(Element)
@@ -340,6 +341,20 @@ if(first())
         LastToggle = Toggle        
     }
     
+    function void toggleFilename(Toggle)
+    {
+  #      EGP:egpAlpha(57, Toggle * 255)
+  #      
+  #      local Directories = CurrentFile:explode("/")      
+  #      local Filename = Directories[Directories:count(), string]
+  #      if(Filename:length() > 31)
+  #      {
+  #          Filename = "..." + Filename:sub(Filename:length() - 28, Filename:length())    
+  #      }
+ 
+  #      EGP:egpSetText(57, Filename)
+    }
+    
     function void toggleProgressBar(Toggle, Progress)
     {
         local Al = 255 * Toggle
@@ -432,8 +447,8 @@ if(first())
     # [ ---  Modes --- ] #
     function void dump()
     {
-        E2Parsing = E2Combining = VLoading = VLineCounter = E2Combined = E2Parsed = PrevX = LastLineIndex = 0
-        VDone = PrevLine = 1 
+        E2Parsing = E2Combining = VLoading = VLineCounter = E2Combined = E2Parsed = PrevX = 0
+        LastLineIndex = VDone = PrevLine = 1 
         
         FileContents = CurrentFile = ""
         
@@ -444,6 +459,7 @@ if(first())
         E2Data = E2Events = table()
         
         toggleSidebar(0)
+        toggleFilename(0)
         
         resetText()  
         
@@ -601,34 +617,21 @@ if(first())
         EGP:egpAlpha(55,0)
         EGP:egpAlpha(56,0)
         
+        # Filename Label
+      #  EGP:egpText(57, "", vec2())
+      #  centralize(57, vec2(100,240))
+      #  EGP:egpFont(57, "Consolas")
+      #  EGP:egpSize(57, 11) 
+        
+        toggleFilename(0)
+        
         setMode("idle")    
     }
- 
-    function void addLineToContext(Index)
-    {            
-        local Data = E2Data[Index, table]
-            
-        PreprocText       += Data["preproc",      string] + "\n"                       
-        DefaultText       += Data["default",      string] + "\n"
-        CommentsText      += Data["comment",      string] + "\n"
-        StringsText       += Data["string",       string] + "\n"
-        EnumsText         += Data["enum",         string] + "\n"
-        TypesText         += Data["type",         string] + "\n"
-        KeywordsText      += Data["keyword",      string] + "\n"
-        NumbersText       += Data["number",       string] + "\n"
-        FunctionsText     += Data["function",     string] + "\n"
-        PPCommandsText    += Data["ppcommand",    string] + "\n"
-        UserFunctionsText += Data["userfunction", string] + "\n"
-        VariablesText     += Data["variable",     string] + "\n"
-            
-        ErrorText         += Data["error", string]  + "\n"
-        TabSpaceText      += Data["tabspc", string] + "\n"                               
-    }
-    
+
     function string string:removeLine(I)
     {
         local Lines = This:explode("\n")
-        Lines:remove(I)
+        Lines:remove(min(I, Lines:count() - 1))
         return Lines:concat("\n")   
     }
     
@@ -649,6 +652,105 @@ if(first())
         
         ErrorText         = ErrorText:removeLine(Index)
         TabSpaceText      = TabSpaceText:removeLine(Index)
+    }
+ 
+    function void addBelow(Index)
+    {            
+        local Data = E2Data[Index, table]
+            
+        PreprocText       += Data["preproc",      string] + "\n"                       
+        DefaultText       += Data["default",      string] + "\n"
+        CommentsText      += Data["comment",      string] + "\n"
+        StringsText       += Data["string",       string] + "\n"
+        EnumsText         += Data["enum",         string] + "\n"
+        TypesText         += Data["type",         string] + "\n"
+        KeywordsText      += Data["keyword",      string] + "\n"
+        NumbersText       += Data["number",       string] + "\n"
+        FunctionsText     += Data["function",     string] + "\n"
+        PPCommandsText    += Data["ppcommand",    string] + "\n"
+        UserFunctionsText += Data["userfunction", string] + "\n"
+        VariablesText     += Data["variable",     string] + "\n"
+            
+        ErrorText         += Data["error", string]  + "\n"
+        TabSpaceText      += Data["tabspc", string] + "\n"                               
+    }
+    
+    function void addAbove(Index)
+    {
+        local Data = E2Data[Index, table]
+            
+        PreprocText       = Data["preproc",      string] + "\n"  + PreprocText                      
+        DefaultText       = Data["default",      string] + "\n"  + DefaultText 
+        CommentsText      = Data["comment",      string] + "\n"  + CommentsText
+        StringsText       = Data["string",       string] + "\n"  + StringsText  
+        EnumsText         = Data["enum",         string] + "\n"  + EnumsText 
+        TypesText         = Data["type",         string] + "\n"  + TypesText 
+        KeywordsText      = Data["keyword",      string] + "\n"  + KeywordsText 
+        NumbersText       = Data["number",       string] + "\n"  + NumbersText 
+        FunctionsText     = Data["function",     string] + "\n"  + FunctionsText  
+        PPCommandsText    = Data["ppcommand",    string] + "\n"  + PPCommandsText  
+        UserFunctionsText = Data["userfunction", string] + "\n"  + UserFunctionsText
+        VariablesText     = Data["variable",     string] + "\n"  + VariablesText
+            
+        ErrorText         = Data["error", string] + "\n"  + ErrorText 
+        TabSpaceText      = Data["tabspc", string] + "\n"  + TabSpaceText  
+    }
+    
+    function void showContext()
+    {
+        local Colors = CVConfig["colors", table]
+
+        addSyntax(1, PPCommandsText,    Colors["ppcommand",    vector])       
+        addSyntax(2, NumbersText,       Colors["number",       vector])
+        addSyntax(3, EnumsText,         Colors["enum",         vector])        
+        addSyntax(4, TypesText,         Colors["type",         vector])
+        addSyntax(5, FunctionsText,     Colors["function",     vector])
+        addSyntax(6, UserFunctionsText, Colors["userfunction", vector])
+        addSyntax(7, CommentsText,      Colors["comment",      vector])        
+        addSyntax(8, PreprocText,       Colors["preproc",      vector])
+        addSyntax(9, VariablesText,     Colors["variable",     vector])
+        addSyntax(10, KeywordsText,     Colors["keyword",      vector])
+        addSyntax(11, StringsText,      Colors["string",       vector])
+        addSyntax(12, DefaultText,      Colors["unknown",      vector])  
+         
+        addSyntax(13, TabSpaceText,     Colors["tabspc",       vector])  
+        addSyntax(14, ErrorText,        Colors["error",        vector])          
+    }
+    
+    function number initContext(Start, End)
+    {
+        if(!VLoading & VDone)
+        {
+            VLoading = 1
+            VDone    = 1            
+            VLineCounter = Start          
+            CommentsText = ErrorText = TabSpaceText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
+        }
+        else
+        {         
+            if(!VDone)
+            {                   
+                local Limit = E2Data:count()                
+                while(perf())
+                {
+                    addBelow(VLineCounter)                        
+                    VLineCounter++                  
+                    if(VLineCounter > End | VLineCounter > Limit)
+                    {
+                        VDone = 1
+                        break   
+                    }
+                }     
+            }   
+            else
+            {
+                showContext()
+                VLoading = 0               
+                return 1                 
+            }            
+        }
+        
+        return 0                
     }
    
     function void updateCursor()
@@ -790,7 +892,7 @@ if(first())
         elseif(clicked(49))
         {            
             Page++
-            if(Page >= ceil(Files:count() / 10))
+            if(Page >= ceil(Files:count() / 11))
             {
                 Page--   
                 playSound("error")
@@ -842,7 +944,8 @@ if(first())
                     {
                         EGP:egpAlpha(I, 0)
                         EGP:egpAlpha(I + 1, 0)
-                        EGP:egpAlpha(I + 2, 0)                        
+                        EGP:egpAlpha(I + 2, 0)  
+                                              
                         continue    
                     }
                     
@@ -910,6 +1013,7 @@ if(first())
     
     function void openFile()
     {
+        toggleFilename(1)
         local Contents = loadFile(CurrentFile)
         switch(Contents)
         {
@@ -920,7 +1024,7 @@ if(first())
                 EGP:egpAlpha(55,255)
                 EGP:egpAlpha(56,255)
                 EGP:egpAlpha(11, 0)  
-    
+                
                 setMode("parseContents")
             break   
         
@@ -968,7 +1072,7 @@ if(first())
                 
                 EGP:egpPos(1,  vec2(LastLineNumbersWidth + 2.5, 0))      
                                  
-                setMode("visualizeData")  
+                setMode("newContext")  
                 
                 return
             }               
@@ -1002,133 +1106,65 @@ if(first())
         }
     }
 
-    function number table:visualize([Start End]:number)
-    {
-        if(!VLoading & VDone)
-        {
-            VLoading = 1
-            VDone    = 0
-            
-            VLineCounter = Start
-          
-            CommentsText = ErrorText = TabSpaceText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
-        }
-        else
-        {         
-            if(!VDone)
-            {                   
-                local Limit = This:count()
-                
-                while(perf())
-                {
-                    local Data = This[VLineCounter, table]
-            
-                    PreprocText       += Data["preproc",      string] + "\n"                       
-                    DefaultText       += Data["default",      string] + "\n"
-                    CommentsText      += Data["comment",      string] + "\n"
-                    StringsText       += Data["string",       string] + "\n"
-                    EnumsText         += Data["enum",         string] + "\n"
-                    TypesText         += Data["type",         string] + "\n"
-                    KeywordsText      += Data["keyword",      string] + "\n"
-                    NumbersText       += Data["number",       string] + "\n"
-                    FunctionsText     += Data["function",     string] + "\n"
-                    PPCommandsText    += Data["ppcommand",    string] + "\n"
-                    UserFunctionsText += Data["userfunction", string] + "\n"
-                    VariablesText     += Data["variable",     string] + "\n"
-                        
-                    ErrorText    += Data["error", string]  + "\n"
-                    TabSpaceText += Data["tabspc", string] + "\n"
-                        
-                    VLineCounter++
-                    
-                    if(VLineCounter > End | VLineCounter > Limit)
-                    {
-                        VDone = 1
-                        break   
-                    }
-                }     
-            }   
-            else
-            {
-                local Colors = CVConfig["colors", table]
-        
-                addSyntax(1, PPCommandsText,    Colors["ppcommand", vector])       
-                addSyntax(2, NumbersText,       Colors["number", vector])
-                addSyntax(3, EnumsText,         Colors["enum", vector])        
-                addSyntax(4, TypesText,         Colors["type", vector])
-                addSyntax(5, FunctionsText,     Colors["function", vector])
-                addSyntax(6, UserFunctionsText, Colors["userfunction", vector])
-                addSyntax(7, CommentsText,      Colors["comment", vector])        
-                addSyntax(8, PreprocText,       Colors["preproc", vector])
-                addSyntax(9, VariablesText,     Colors["variable", vector])
-                addSyntax(10, KeywordsText,     Colors["keyword", vector])
-                addSyntax(11, StringsText,      Colors["string", vector])
-                addSyntax(12, DefaultText,      Colors["unknown", vector])  
-                 
-                addSyntax(13, TabSpaceText,      Colors["tabspc", vector])  
-                addSyntax(14, ErrorText,      Colors["error", vector])  
-
-                VLoading = 0
-                
-                return 1                 
-            }            
-        }
-        
-        return 0         
-    }
-    
-    function number initContext(Start, End)
-    {
-              
-    }
-    
-    function void showContext()
-    {
-        local Colors = CVConfig["colors", table]
-
-        addSyntax(1, PPCommandsText,    Colors["ppcommand",    vector])       
-        addSyntax(2, NumbersText,       Colors["number",       vector])
-        addSyntax(3, EnumsText,         Colors["enum",         vector])        
-        addSyntax(4, TypesText,         Colors["type",         vector])
-        addSyntax(5, FunctionsText,     Colors["function",     vector])
-        addSyntax(6, UserFunctionsText, Colors["userfunction", vector])
-        addSyntax(7, CommentsText,      Colors["comment",      vector])        
-        addSyntax(8, PreprocText,       Colors["preproc",      vector])
-        addSyntax(9, VariablesText,     Colors["variable",     vector])
-        addSyntax(10, KeywordsText,     Colors["keyword",      vector])
-        addSyntax(11, StringsText,      Colors["string",       vector])
-        addSyntax(12, DefaultText,      Colors["unknown",      vector])  
-         
-        addSyntax(13, TabSpaceText,     Colors["tabspc",       vector])  
-        addSyntax(14, ErrorText,        Colors["error",        vector])          
-    }
-    
-    function void reloadVisualizedData()
+    function void newContext()
     {
         local Total = ceil(512 / CVConfig["fontsize", number])
-        local N = CVConfig["curline", number]
-        
-        setLineNumbers(N) 
-        
-        if(E2Data:visualize(N, N + Total))
+        local Cur   = CVConfig["curline", number]
+        if(initContext(Cur, Cur + Total))
         {
+            setLineNumbers(Cur) 
             setMode("idle")   
-            LastLineIndex = N
-        }              
+        }
+    }
+
+    function void reloadVisualizedData()
+    {
+        setMode("newContext")       
     }
     
     function void visualizeData()
     {
-        local Total = ceil(512 / CVConfig["fontsize", number])
-        local N = CVConfig["curline", number]
-        
-        setLineNumbers(N) 
-
-        if(E2Data:visualize(N, N + Total))
+        if(!perf())
         {
+            CVConfig["curline", number] = LastLineIndex
+            warOut("Not enough OPS to scroll atm.")
+            setMode("idle")
+            return
+        }
+        
+        local Total = ceil(512 / CVConfig["fontsize", number])
+        local N     = CVConfig["curline", number]
+        
+        local Diff = N - LastLineIndex
+
+        if(Diff > 0)
+        {
+            for(I = 1, Diff)
+            {
+                removeLineFromContext(1)    
+                addBelow(LastLineIndex + Total + I)        
+            }
+            
+            setLineNumbers(N) 
+            
+            showContext()
             setMode("idle")   
-            LastLineIndex = N
-        }              
+            LastLineIndex = N                               
+        }
+        elseif(Diff < 0)
+        {
+            for(I = 1, -Diff)
+            {
+                removeLineFromContext(inf()) 
+                addAbove(LastLineIndex - I)                     
+            }   
+                  
+            setLineNumbers(N) 
+            
+            showContext()
+            setMode("idle")   
+            LastLineIndex = N       
+        }     
     }
     
     sucOut("Initialized.")
@@ -1143,6 +1179,7 @@ setUser(owner())
 if(1)
 {
     local NewCpuLimit = onArgsChat("cpu")
+    
     if(NewCpuLimit)
     {
         CpuLimit = NewCpuLimit:toNumber()
