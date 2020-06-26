@@ -4,7 +4,12 @@
 @persist Connections:table Switcher:number LinkRemover:number
 
 interval(60)
-
+#[
+    This code was written by Sixmax (STEAM_0:0:104139026).
+    
+    You may use this in your projects but not claim it as yours (Check License: https://github.com/Sixmax/gmod/blob/master/license.txt)
+    Abuse may cause an inconvenience on your and my side. So please respect my work and follow the licensing.
+]#
 PrintOutput = 1
 Delay = 3500
 
