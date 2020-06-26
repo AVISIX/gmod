@@ -341,20 +341,6 @@ if(first())
         LastToggle = Toggle        
     }
     
-    function void toggleFilename(Toggle)
-    {
-  #      EGP:egpAlpha(57, Toggle * 255)
-  #      
-  #      local Directories = CurrentFile:explode("/")      
-  #      local Filename = Directories[Directories:count(), string]
-  #      if(Filename:length() > 31)
-  #      {
-  #          Filename = "..." + Filename:sub(Filename:length() - 28, Filename:length())    
-  #      }
- 
-  #      EGP:egpSetText(57, Filename)
-    }
-    
     function void toggleProgressBar(Toggle, Progress)
     {
         local Al = 255 * Toggle
@@ -459,7 +445,6 @@ if(first())
         E2Data = E2Events = table()
         
         toggleSidebar(0)
-        toggleFilename(0)
         
         resetText()  
         
@@ -617,14 +602,6 @@ if(first())
         EGP:egpAlpha(55,0)
         EGP:egpAlpha(56,0)
         
-        # Filename Label
-      #  EGP:egpText(57, "", vec2())
-      #  centralize(57, vec2(100,240))
-      #  EGP:egpFont(57, "Consolas")
-      #  EGP:egpSize(57, 11) 
-        
-        toggleFilename(0)
-        
         setMode("idle")    
     }
 
@@ -722,19 +699,24 @@ if(first())
         if(!VLoading & VDone)
         {
             VLoading = 1
-            VDone    = 1            
-            VLineCounter = Start          
+            VDone    = 0
+            
+            VLineCounter = Start
+          
             CommentsText = ErrorText = TabSpaceText = PreprocText = StringsText = KeywordsText = VariablesText = TypesText = NumbersText = UserFunctionsText = FunctionsText = EnumsText = PPCommandsText = DefaultText = ""
         }
         else
         {         
             if(!VDone)
             {                   
-                local Limit = E2Data:count()                
+                local Limit = E2Data:count()
+                
                 while(perf())
                 {
-                    addBelow(VLineCounter)                        
-                    VLineCounter++                  
+                    addBelow(VLineCounter)
+                        
+                    VLineCounter++
+                    
                     if(VLineCounter > End | VLineCounter > Limit)
                     {
                         VDone = 1
@@ -745,7 +727,9 @@ if(first())
             else
             {
                 showContext()
-                VLoading = 0               
+
+                VLoading = 0
+                
                 return 1                 
             }            
         }
@@ -892,7 +876,7 @@ if(first())
         elseif(clicked(49))
         {            
             Page++
-            if(Page >= ceil(Files:count() / 11))
+            if(Page >= ceil(Files:count() / 11) + 1)
             {
                 Page--   
                 playSound("error")
@@ -944,8 +928,7 @@ if(first())
                     {
                         EGP:egpAlpha(I, 0)
                         EGP:egpAlpha(I + 1, 0)
-                        EGP:egpAlpha(I + 2, 0)  
-                                              
+                        EGP:egpAlpha(I + 2, 0)                        
                         continue    
                     }
                     
@@ -1013,7 +996,6 @@ if(first())
     
     function void openFile()
     {
-        toggleFilename(1)
         local Contents = loadFile(CurrentFile)
         switch(Contents)
         {
@@ -1024,7 +1006,7 @@ if(first())
                 EGP:egpAlpha(55,255)
                 EGP:egpAlpha(56,255)
                 EGP:egpAlpha(11, 0)  
-                
+    
                 setMode("parseContents")
             break   
         
@@ -1179,7 +1161,6 @@ setUser(owner())
 if(1)
 {
     local NewCpuLimit = onArgsChat("cpu")
-    
     if(NewCpuLimit)
     {
         CpuLimit = NewCpuLimit:toNumber()
