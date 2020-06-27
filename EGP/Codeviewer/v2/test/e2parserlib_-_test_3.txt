@@ -1,4 +1,4 @@
-@name E2ParserLib - Test 2
+@name E2ParserLib - Test 3
 
 # [ --- Config --- ] #
 @persist Fontsize
@@ -6,7 +6,7 @@
 @persist Syntax:table
 
 # [ --- Important --- ] #
-@persist FileLoaded FileParsed Visualizing LineCounter Combined 
+@persist FileLoaded FileParsed Visualizing 
 @persist [ParseResult E2Syntax]:table
 @persist [E ]:entity
 @persist 
@@ -26,7 +26,7 @@ if(first())
 { 
     E = entity()
       
-    #include "libraries/e2parser"    
+    #include "libraries/e2parser_v2"    
     
     # --- General shit --- #
     runOnTick(1)
@@ -117,7 +117,7 @@ if(first())
                     local Data = This[VLineCounter, table]
             
                     PreprocText       += Data["preproc",      string] + "\n"                       
-                    DefaultText       += Data["unknown",      string] + "\n"
+                    DefaultText       += Data["default",      string] + "\n"
                     CommentsText      += Data["comment",      string] + "\n"
                     StringsText       += Data["string",       string] + "\n"
                     EnumsText         += Data["enum",         string] + "\n"
@@ -167,34 +167,22 @@ if(first())
 
 if(FileParsed)
 {
-    if(Combined)
-    {   
-        if(E2Syntax:visualize(1, 35))
-        {
-            runOnTick(0)    
-        }
-    }
-    else
+    if(E2Syntax:visualize(1, 35))
     {
-        ParseResult:combineE2Result()
-        Combined = combineDone()       
-        if(Combined)
-        {
-            E2Syntax = combineResult() 
-        }   
+        runOnTick(0)    
     }    
 }
 else
 {
     if(FileLoaded)
     { 
-        File:parseE2()
+        local Res = File:parseE2()
         
         setName("E2ParserLib - Test 1\nStatu: Parsing...\nProgress: " +  e2Progress())
         
-        if(e2Done())
+        if(Res:count() > 0)
         {
-            ParseResult = e2Result()
+            E2Syntax = Res
             setName("E2ParserLib - Test 1")
             hint("File Parsed", 2)
             FileParsed = 1
@@ -205,7 +193,7 @@ else
         switch(File)
         {
             case "",
-                e2Reset()
+                resetE2()
                 File = getFile(">e2shared/e2test.txt")
             break
             

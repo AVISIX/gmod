@@ -26,13 +26,6 @@
 
 #@model models/hunter/blocks/cube05x05x05.mdl
 
-#[
-    This code was written by Sixmax (STEAM_0:0:104139026).
-    
-    You may use this in your projects but not claim it as yours (Check License: https://github.com/Sixmax/gmod/blob/master/license.txt)
-    Abuse may cause an inconvenience on your and my side. So please respect my work and follow the licensing.
-]#
-
 interval(60)
 
 AimEnt = User:aimEntity()
@@ -320,7 +313,7 @@ if(first())
         EGP:egpPos(3,  vec2(Width / 2, 256))
         EGP:egpSize(3, vec2(Width, 512))       
         EGP:egpPos(4,  vec2(Width, 256))      
-        
+           
         LastLineNumbersWidth = Width
     }
 
@@ -450,6 +443,8 @@ if(first())
         
         E2Data = E2Events = table()
         
+        EGP:egpAlpha(57, 0)
+        
         toggleSidebar(0)
         
         resetText()  
@@ -502,6 +497,10 @@ if(first())
         EGP:egpColor(5, col("linenums"))
         EGP:egpFont(5, CVConfig["font", string])
         EGP:egpSize(5, CVConfig["fontsize", number])
+
+        # Hovered Line Indicator
+        EGP:egpBox(57, vec2(), vec2())
+        EGP:egpAlpha(57, 50)
                             
         setLineNumbers(1)
         
@@ -607,57 +606,10 @@ if(first())
         
         EGP:egpAlpha(55,0)
         EGP:egpAlpha(56,0)
-        
-        setMode("idle")    
+             visualizeFile("e2test3")
+       # setMode("idle")    
     }
- 
-    function void addLineToContext(Index)
-    {            
-        local Data = E2Data[Index, table]
-            
-        PreprocText       += Data["preproc",      string] + "\n"                       
-        DefaultText       += Data["default",      string] + "\n"
-        CommentsText      += Data["comment",      string] + "\n"
-        StringsText       += Data["string",       string] + "\n"
-        EnumsText         += Data["enum",         string] + "\n"
-        TypesText         += Data["type",         string] + "\n"
-        KeywordsText      += Data["keyword",      string] + "\n"
-        NumbersText       += Data["number",       string] + "\n"
-        FunctionsText     += Data["function",     string] + "\n"
-        PPCommandsText    += Data["ppcommand",    string] + "\n"
-        UserFunctionsText += Data["userfunction", string] + "\n"
-        VariablesText     += Data["variable",     string] + "\n"
-            
-        ErrorText         += Data["error", string]  + "\n"
-        TabSpaceText      += Data["tabspc", string] + "\n"                               
-    }
-    
-    function string string:removeLine(I)
-    {
-        local Lines = This:explode("\n")
-        Lines:remove(I)
-        return Lines:concat("\n")   
-    }
-    
-    function void removeLineFromContext(Index)
-    {
-        PreprocText       = PreprocText:removeLine(Index)
-        DefaultText       = DefaultText:removeLine(Index)
-        CommentsText      = CommentsText:removeLine(Index)
-        StringsText       = StringsText:removeLine(Index)
-        EnumsText         = EnumsText:removeLine(Index)
-        TypesText         = TypesText:removeLine(Index)
-        KeywordsText      = KeywordsText:removeLine(Index)
-        NumbersText       = NumbersText:removeLine(Index)
-        FunctionsText     = FunctionsText:removeLine(Index)
-        PPCommandsText    = PPCommandsText:removeLine(Index)
-        UserFunctionsText = UserFunctionsText:removeLine(Index)
-        VariablesText     = VariablesText:removeLine(Index)
-        
-        ErrorText         = ErrorText:removeLine(Index)
-        TabSpaceText      = TabSpaceText:removeLine(Index)
-    }
-   
+
     function void updateCursor()
     {
         PrevLine    = CVConfig["curline", number] + Cursor:y():mSub(CVConfig["fontsize", number]) / CVConfig["fontsize", number] - 1
@@ -712,7 +664,10 @@ if(first())
         elseif(CodeActive)
         {
             if(AimEnt == EGP:entity())
-            {
+            {        
+                EGP:egpPos(57, vec2(LastLineNumbersWidth / 2 + 256, Cursor:y():mSub(CVConfig["fontsize", number]) - CVConfig["fontsize", number] / 2))
+                EGP:egpSize(57, vec2(512 - LastLineNumbersWidth, CVConfig["fontsize", number]))     
+
                 if(clicked("E"))
                 {
                     local Selected = CVConfig["curline", number] + Cursor:y():mSub(CVConfig["fontsize", number]) / CVConfig["fontsize", number] - 1                
@@ -924,6 +879,7 @@ if(first())
                 FileContents = Contents
                 sucOut("File Loaded.")
                 
+                EGP:egpAlpha(57, 0)
                 EGP:egpAlpha(55,255)
                 EGP:egpAlpha(56,255)
                 EGP:egpAlpha(11, 0)  
@@ -967,6 +923,8 @@ if(first())
 
                 EGP:egpAlpha(55,0)
                 EGP:egpAlpha(56,0)
+                
+                EGP:egpAlpha(57, 10)
                 
                 EGP:egpAlpha(11, 255) 
                 
