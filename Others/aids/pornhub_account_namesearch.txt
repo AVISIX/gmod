@@ -1,0 +1,138 @@
+@name Pornhub Account Namesearch
+@outputs CurName:string
+@persist Requesting Page LineCounter NameCounter NameTimer SpamDelay
+@persist [ Mode Html Keyword ]:string
+@persist [ Names Lines ]:array
+
+if( first() )
+{
+    Keyword   = "sweaty" 
+    Page      = 1
+    SpamDelay = 1.5
+    
+    runOnTick(1)
+    runOnHTTP(1)
+
+    function void setMode(NewMode:string)
+    {
+        Mode = NewMode   
+    }
+    
+    function string loadUrl(Url:string)
+    {
+        if(!Requesting)
+        {
+            if(httpCanRequest())
+            {
+                Requesting = 1
+                httpRequest(Url)
+            }
+        }
+        else
+        {
+            if(httpClk())
+            {
+                Requesting = 0
+                
+                if(httpSuccess())
+                {
+                    return httpData()      
+                }
+                
+                return "error"             
+            }  
+        } 
+        
+        return ""
+    }
+    
+    setMode("init")
+    
+    function void init()
+    {
+        setMode("getPage")   
+    }
+    
+    function void getPage()
+    {        
+        # newest  = "https://de.pornhub.com/user/search?username=" + httpUrlEncode(Keyword) + "&city=&gender=0&orientation=0&relation=0&country=&o=newest&age1=0&age2=0&page=" + Page
+        # popular = "https://de.pornhub.com/user/search?username=" + httpUrlEncode(Keyword) + "&city=&gender=0&orientation=0&relation=0&country=&o=popular&age1=0&age2=0&page=" + Page
+        
+        local Data = loadUrl("https://de.pornhub.com/user/search?username=" + httpUrlEncode(Keyword) + "&city=&gender=0&orientation=0&relation=0&country=&o=newest&age1=0&age2=0&page=" + Page) 
+        
+        switch(Data)
+        {
+            default,
+            
+            Names       = array()
+            Html        = Data
+            Lines       = Data:explode("\n")
+            LineCounter = 0
+            
+            setMode("getNames")
+            break
+            
+            case "error",
+            error("Couldn't load page.")
+            break
+            
+            case "",break
+        }   
+    }
+    
+    function void getNames()
+    {
+        while(perf())
+        {
+            LineCounter++
+            
+            if(LineCounter > Lines:count())
+            {
+                NameCounter = NameTimer = 0            
+                setMode("cancer")
+                break   
+            }
+            
+            local Line = Lines[LineCounter, string]
+            
+            if(!Line:find("usernameLink"))
+            {
+                continue   
+            }
+            
+            local Name = Line:replaceRE(".*title=\".*\">", ""):replaceRE("</.*", "")
+            
+            if(Name:replaceRE("%s", "") == "")
+            {
+                continue    
+            }
+            
+            Names:pushString(Name)
+        }
+    }
+    
+    function void cancer()
+    {
+        if(curtime() > NameTimer)
+        {
+            NameCounter++
+            
+            if(NameCounter > Names:count())
+            {
+                Page++
+                setMode("getPage")
+                return   
+            }
+            
+            local Name = Names[NameCounter, string]
+            
+            CurName = Name 
+            
+            #concmd("say " + Name)
+            
+            NameTimer = curtime() + SpamDelay   
+        }
+    }
+}
+
+Mode()
