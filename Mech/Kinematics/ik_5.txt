@@ -1,0 +1,157 @@
+@name IK 5
+@inputs End:entity
+@persist E:entity [LenA LenB LenC LenD LenE] Switch
+
+interval(60)
+
+if(first())
+{
+    Switch = 0
+    
+    E = entity()
+
+    LenA = 50
+    LenB = 65
+    LenC = 40
+    LenD = 25
+    LenE = 20
+
+    local S = 0.5
+
+    holoCreate(1, E:toWorld(vec(0,0,0)), vec(S), E:toWorld(ang()), vec(255,0,0), "cube")
+    holoCreate(2, holoEntity(1):toWorld(vec(0,0,LenA)), vec(S), E:toWorld(ang()), vec(0,255,0), "cube")
+    holoCreate(3, holoEntity(2):toWorld(vec(0,0,LenB)), vec(S), E:toWorld(ang()), vec(0,0,255), "cube")
+    holoCreate(4, holoEntity(3):toWorld(vec(0,0,LenC)), vec(S), E:toWorld(ang()), vec(255,255,0), "cube")
+    holoCreate(5, holoEntity(4):toWorld(vec(0,0,LenD)), vec(S), E:toWorld(ang()), vec(0,255,255), "cube")
+    holoCreate(6, holoEntity(5):toWorld(vec(0,0,LenE)), vec(S), E:toWorld(ang()), vec(255,0,255), "cube")
+    
+    holoParent(1, E)
+    holoParent(2, 1)
+    holoParent(3, 2)
+    holoParent(4, 3)
+    holoParent(5, 4)
+    holoParent(6, 5)
+    
+    
+    holoCreate(7, holoEntity(1):toWorld(vec(0,0,LenA / 2)), vec(S/2, S/2, LenA / 13), E:toWorld(ang()), vec(255), "cube")
+    holoParent(7, 1)
+
+    holoCreate(8, holoEntity(2):toWorld(vec(0,0,LenB / 2)), vec(S/2, S/2, LenB / 13), E:toWorld(ang()), vec(255), "cube")
+    holoParent(8, 2)
+    
+    holoCreate(9, holoEntity(3):toWorld(vec(0,0,LenC / 2)), vec(S/2, S/2, LenC / 13), E:toWorld(ang()), vec(255), "cube")
+    holoParent(9, 3)
+    
+    holoCreate(10, holoEntity(4):toWorld(vec(0,0,LenD / 2)), vec(S/2, S/2, LenD / 13), E:toWorld(ang()), vec(255), "cube")
+    holoParent(10, 4)
+    
+    holoCreate(11, holoEntity(5):toWorld(vec(0,0,LenE / 2)), vec(S/2, S/2, LenE / 13), E:toWorld(ang()), vec(255), "cube")
+    holoParent(11, 5)
+
+    function number cosine(A,B,C)
+    {
+        return acos((A*A + B*B - C*C) / (2*A*B))  
+    }
+    
+    function void entity:ik5(A,B,C,D,E,F,Dest:vector)
+    {        
+        if(holoEntity(F):pos():distance(Dest) < 1)
+        {
+            return    
+        }
+
+        local H3 = holoEntity(C) 
+        
+        if(1)
+        {
+            local H1 = holoEntity(A)
+            local H2 = holoEntity(B) 
+        
+            if(1)
+            {        
+                local AxisA = This:toLocalAxis(Dest - H1:pos())
+                local AxisAA = AxisA:toAngle()
+                holoAng(A, This:toWorld(ang(AxisAA:pitch() - cosine(clamp(AxisA:length() - LenD - LenE, LenA / 2, LenA + LenB), LenA, LenB)  + 90, AxisAA:yaw(),0)))
+            }
+            
+            if(1)
+            {                                
+                local AxisB = H1:toLocalAxis(H2:pos() - Dest)
+                holoAng(B, H1:toWorld(ang(-AxisB:toAngle():pitch() + 90 - cosine(min(AxisB:length() - LenD - LenE, LenB + LenC), LenB, LenC),0,0)))
+            }
+            
+            if(1)
+            {
+                local AxisC = H2:toLocalAxis(H3:pos() - Dest)
+                holoAng(C, H2:toWorld(ang(-AxisC:toAngle():pitch() + 90 + cosine(min(AxisC:length() - LenE, LenC + LenD), LenC, LenD),0,0)))               
+            }   
+        }    
+        
+        if(1)
+        {              
+            local H4    = holoEntity(D)   
+            local AxisD = H3:toLocalAxis(H4:pos() - Dest)
+            local Dis   = min(AxisD:length(), LenD + LenE)
+            holoAng(D, H3:toWorld(ang(AxisD:toAngle():pitch() - cosine(Dis, LenD, LenE) - 90,0,0)))    
+            holoAng(E, H4:toWorld(ang(-cosine(LenD, LenE, Dis) + 180,0,0)))
+        }
+    }
+
+    function void entity:ik5rev(A,B,C,D,E,F,Dest:vector)
+    {
+        if(holoEntity(F):pos():distance(Dest) < 1)
+        {
+            return    
+        }
+
+        local H3 = holoEntity(C) 
+        
+        if(1)
+        {
+            local H1 = holoEntity(A)
+            local H2 = holoEntity(B) 
+
+            if(1)
+            {
+                local AxisA = This:toLocalAxis(Dest - H1:pos())
+                local AxisAA = AxisA:toAngle()
+                holoAng(A, This:toWorld(ang(AxisAA:pitch() - cosine(clamp(AxisA:length() - LenD - LenE, LenA / 2, LenA + LenB), LenA, LenB)  + 90, AxisAA:yaw(),0)))
+            } 
+            
+            if(1)
+            {                       
+                local AxisB = H1:toLocalAxis(H2:pos() - Dest)
+                holoAng(B, H1:toWorld(ang(-AxisB:toAngle():pitch() + 90 - cosine(min(AxisB:length() - LenD - LenE, LenB + LenC), LenB, LenC),0,0)))
+            }
+    
+            if(1)
+            {
+                local AxisC = H2:toLocalAxis(H3:pos() - Dest)
+                holoAng(C, H2:toWorld(ang(-AxisC:toAngle():pitch() + 90 - cosine(min(AxisC:length() - LenE, LenC + LenD), LenC, LenD),0,0)))                     
+            } 
+        }
+               
+        if(1)
+        {                         
+            local H4    = holoEntity(D) 
+            local AxisD = H3:toLocalAxis(H4:pos() - Dest)
+            local Dis   = min(AxisD:length(), LenD + LenE)
+            holoAng(D, H3:toWorld(ang(-AxisD:toAngle():pitch() + cosine(Dis, LenD, LenE) + 90,0,0)))               
+            holoAng(E, H4:toWorld(ang(cosine(LenD, LenE, Dis) + 180,0,0)))        
+        }
+    }
+}
+
+if(changed(owner():keyUse()) & owner():keyUse())
+{
+    Switch = !Switch   
+}
+
+if(Switch)
+{
+    E:ik5rev(1,2,3,4,5,6,End:pos())
+}
+else
+{
+    E:ik5(1,2,3,4,5,6,End:pos())   
+}
