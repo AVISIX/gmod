@@ -541,10 +541,13 @@ if( first() )
                 {
                     # If the first bit is NOT set, then the division is in "Frames"
                     
-                    local Frames = abs(Division && 0x7F00)
+                    local Frames = Division && 0x7F00
+                    
+                    Frames = (Frames == 29 ? 29.97 : Frames)
+                    
                     local Ticks  = (Division && 0x00FF)
                     
-                    Division = Ticks  # I have no idea if this is correct lol
+                    Division = 1000000 / (Frames * Ticks) #1000000 / (this.getSMPTEFrames() * this.getTicksPerFrame());  # I have no idea if this is correct lol
                 }
 
                 TempTrack                   = table()       

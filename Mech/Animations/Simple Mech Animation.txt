@@ -1,0 +1,203 @@
+@name Simple Mech Animation
+@persist Anim:table E:entity
+@model models/hunter/blocks/cube05x05x05.mdl
+
+interval(60)
+
+if(first())
+{
+    E = entity()
+  
+    E:propGravity(0)
+
+    rangerPersist(1)
+    rangerFilter(E)
+   
+    holoCreate(1)
+    holoCreate(2)
+    holoCreate(3)
+    holoCreate(4)
+       
+    holoColor(1, vec(255,0,0))
+    holoColor(2, vec(255,255,0))
+    holoColor(3, vec(0,255,255))
+    holoColor(4, vec(255,0,255))
+    
+    function void table:initAnim(Base:entity, Speed:number, TriggerRange:number)
+    {
+        This:clear()
+        This["counter", number] = 0
+        This["config", table]   = table("base"=Base, "speed"=Speed, "trigger"=TriggerRange)   
+        This["legs", table]     = table()
+    } 
+    
+    function void table:addGait(Key:string, Start, End, Slave:entity, EndPoint:vector, Stepheight)
+    {
+        This["legs", table][Key, table] = table(
+            "start" = Start,
+            "end"   = End,
+            "slave" = Slave,
+            "endv"  = EndPoint,
+            "steph" = Stepheight,         
+            "stepdist" = 0,
+            "stepdir" = 0,            
+            "sounds" = array()
+        )
+    }   
+
+    function void table:override(Key:string, NewPos:vector)
+    {
+        This["legs", table][Key, table]["mode",string]         = "idle"    
+        This["legs", table][Key, table]["animation", vector]   = NewPos   
+        This["legs", table][Key, table]["origin", vector]      = NewPos   
+        This["legs", table][Key, table]["destination", vector] = NewPos   
+        This["legs", table][Key, table]["lastev", vector]      = NewPos          
+    }
+
+    function void table:stepUpdate(Key:string, StepLen, StepDir)
+    {
+        This["legs", table][Key, table]["stepdist", number] = StepLen
+        This["legs", table][Key, table]["stepdir", number]  = StepDir
+    }
+
+    function number cc(Beginning, Ending, TotalCounter)
+    {
+        return max(-Beginning * (1 / (Ending - Beginning)) + ( (1 / (Ending - Beginning)) * TotalCounter ),0)
+    }   
+
+    function number smoothStep(X)
+    {
+        return X * X * (3 - 2 * X)   
+    }
+    
+    function void table:runAnim()
+    {
+        local C = This["config", table]
+        local L = This["legs", table]
+
+        local Base = C["base", entity]
+        local BPos = Base:pos()
+
+        if(This["counter", number] >= 1)
+        {
+            This["counter", number] = 0  
+        }        
+        This["counter", number] = floor(This["counter", number] + C["speed", number], 2)
+
+        foreach(I, Leg:table = L)
+        {       
+            switch(Leg["mode", string])
+            {         
+                default,                 
+                Leg["mode",string] = "idle"     
+                   
+                # [ --- ] #
+                
+                case "idle",
+                if(1)
+                {
+                    local EV  = Base:toWorld(Leg["endv", vector] + vec(cos(Leg["stepdir", number]) * Leg["stepdist", number], sin(Leg["stepdir", number]) * Leg["stepdist", number], 0))
+                    local Dir = (EV - BPos)
+                    Leg["ranger", ranger] = rangerOffset(Dir:length(), BPos, Dir:toAngle():forward())                                 
+                    
+                    if(Leg["lastev", vector]:distance(EV) > C["trigger", number] & This["counter", number] >= Leg["start", number] & This["counter", number] < Leg["end", number])
+                    {                        
+                        Leg["counterpos", number]  = This["counter", number]
+                        Leg["origin", vector]      = Leg["animation", vector]
+                        Leg["destination", vector] = Leg["ranger", ranger]:position()      
+                        Leg["lastev", vector]      = EV              
+                        Leg["mode", string]        = "anim"
+                    }
+                    else
+                    {
+                        break   
+                    }  
+                }
+                   
+                # [ --- ] #
+                     
+                case "anim",
+                if(1)
+                {
+                    local Dir    =  Leg["destination", vector] - Leg["origin", vector]
+                    local Middle = (Leg["origin", vector] + Dir * 0.5) + Base:up() * (Dir:length() / Leg["steph", number])
+                    
+                    local Gait = cc(Leg["counterpos", number], Leg["end", number], This["counter", number])
+                    
+                    Leg["animation", vector] = bezier(Leg["origin", vector], Middle, Leg["destination", vector], smoothStep(Gait))
+
+                    if(Gait >= 1)
+                    {    
+                        local SC = Leg["sounds", array]:count()
+                        
+                        if(Leg["slave", entity] != noentity() & SC)
+                        {
+                            Leg["slave", entity]:soundPlay(Leg["slave", entity]:id(), 0.5, Leg["sounds", array][randint(1, SC), string])
+                        }
+                        
+                        Leg["animation", vector] =  Leg["destination", vector]   
+                        Leg["mode", string]      = "idle"
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    function void table:addSounds(Key:string, Sounds:array)
+    {
+        for(I = 1, Sounds:count())
+        {
+            This["legs", table][Key, table]["sounds", array]:pushString(Sounds[I, string]) 
+        }
+    }
+    
+    function void table:addSound(Key:string, Sound:string)
+    {
+        This["legs", table][Key, table]["sounds", array]:pushString(Sound)         
+    }
+    
+    function vector table:a(Key:string)
+    {
+        return Anim["legs",table][Key, table]["animation",vector]   
+    }
+    
+    Anim:initAnim(E, 0.08, 5)
+    
+    Anim:addGait("A", 0, 0.5, holoEntity(1), vec(50,50,-50), 3)
+    Anim:addGait("B", 0.5, 1, holoEntity(2), vec(50,-50,-50), 3)
+    Anim:addGait("C", 0.5, 1, holoEntity(3), vec(-50,50,-50), 3)
+    Anim:addGait("D", 0, 0.5, holoEntity(4), vec(-50,-50,-50), 3)
+ 
+    local SoundArray = array(
+        "npc/vort/vort_foot1.wav",
+        "npc/vort/vort_foot2.wav",
+        "npc/vort/vort_foot3.wav",
+        "npc/vort/vort_foot4.wav"
+    )
+   
+    Anim:addSounds("A", SoundArray)
+    Anim:addSounds("B", SoundArray)
+    Anim:addSounds("C", SoundArray)
+    Anim:addSounds("D", SoundArray)
+    
+}
+
+Anim:runAnim()
+
+VV = E:velL()
+
+F = VV:setZ(0):length() * 0.75
+R = -atan(VV[1], VV[2]) + 90
+
+Anim:stepUpdate("A",F,R)
+Anim:stepUpdate("B",F,R)
+Anim:stepUpdate("C",F,R)
+Anim:stepUpdate("D",F,R)
+
+holoPos(1, Anim:a("A"))
+holoPos(2, Anim:a("B"))
+holoPos(3, Anim:a("C"))
+holoPos(4, Anim:a("D"))
+
+#:applyForce((E:forward() * 150 - E:vel() * 1) * E:mass())
