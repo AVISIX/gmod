@@ -33,6 +33,19 @@
     
     You may use this in your projects but not claim it as yours (Check License: https://github.com/Sixmax/gmod/blob/master/license.txt)
     Abuse may cause an inconvenience on your and my side. So please respect my work and follow the licensing.
+
+
+
+
+
+	How to use:
+	1. Spawn the Holo Chip
+	2. Spawn this Chip
+	3. Spawn a Cam Controller (All options checked except for Localized Movement & Free Movement)
+	4. Spawn a Chair
+	5. Rightclick the Cam Controller (with the Cam Controller tool) and then the Chair.
+	6. After that simply press "E" to start the Mech up
+
 ]#
 
 # [ --- Global Variables --- ] #
