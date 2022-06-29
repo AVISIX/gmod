@@ -1,3 +1,8 @@
-# My public GMod projects
+# What is this? 
 
-The repository where I put my released projects.
+This repository contains scripts, which I have written over the course of my childhood. 
+
+They are to be used in the popular sandbox game "Garry's Mod" and utilize a ingame scripting language, to create stuff. 
+
+But I mainly used it to create Mechs and other complicated stuff. 
+
